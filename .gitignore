@@ -3,3 +3,5 @@ obj
 dummy_libs
 obj-ndk
 
+samp-debug.keystore
+*.apk

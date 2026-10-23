@@ -28,7 +28,9 @@ Roleplay gamemode for [open.mp](https://open.mp), the server the Android client 
 
 ## Pointing the Android client at it
 
-The client reads `/sdcard/SAMP/settings.ini` on the phone:
+Easiest: bake your server into the APK with `tools/make_apk.py --host your.server.ip` (see
+`docs/CLIENT.md`). Players can still override it with a `settings.ini` in
+`/sdcard/Android/data/com.rockstargames.gtasa/files/SAMP/` (or `/sdcard/SAMP/`):
 
 ```
 host=your.server.ip

@@ -13,9 +13,36 @@ NDK=/path/to/android-ndk ./build.sh
 
 The original Windows toolchain (`build.bat` + `Makefile`) still works the same way.
 
+## Making the APK
+
+The game is not in this repository and must never be distributed with it. `tools/make_apk.py`
+turns **your own** GTA: San Andreas APK into the multiplayer APK:
+
+```
+python3 tools/make_apk.py --apk gta_sa.apk --host your.server.ip --port 7777
+```
+
+It adds `libSAMP.so`, makes the game load it right after `libGTASA.so`, bakes in the server
+address (optional), then rebuilds, aligns and signs the APK as `GTA-SAMP.apk`. It needs Java,
+[apktool](https://apktool.org) and `zipalign` + `apksigner` from the Android SDK build-tools
+(found through `ANDROID_HOME`, or pass `--build-tools`).
+
+Things to know before installing:
+
+- The client only works with the exact game build in `libs/libGTASA.so`
+  (SHA-256 `59e7198de1916d5f7d22037233f385983099fd53cfab07c707ca25b9d7a834d7`); the script refuses other builds unless you pass `--force`.
+- The game is 32-bit (`armeabi-v7a`). Phones without 32-bit app support cannot run it.
+- Uninstall the original game first (the signature differs) and keep its data files
+  (`Android/obb/com.rockstargames.gtasa`).
+- Android 14+ blocks installing apps that target very old Android versions. If you get that error,
+  install from a PC with `adb install --bypass-low-target-sdk-block GTA-SAMP.apk`.
+- Client logs: `adb logcat -s SA_HACK_LOG`.
+
 ## Connecting
 
-The client reads `/sdcard/SAMP/settings.ini`:
+The server baked in by `make_apk.py` is used unless a `settings.ini` overrides it. The client looks
+in `/sdcard/Android/data/com.rockstargames.gtasa/files/SAMP/settings.ini` first (readable on every
+Android version), then `/sdcard/SAMP/settings.ini`:
 
 ```
 host=your.server.ip
