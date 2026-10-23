@@ -5,6 +5,7 @@
 #   ./server/deploy/codespace.sh                          # install + start the server
 #   PLAYIT_SECRET=xxxxx ./server/deploy/codespace.sh      # ...and start the playit.gg tunnel
 #   UPDATE=1 ./server/deploy/codespace.sh                 # reinstall after a git pull
+#   DISCORD=discord.gg/xxxx ./server/deploy/codespace.sh  # show a Discord button in the launcher
 #
 # Codespaces are for development and testing: they stop when idle, so this isn't 24/7 hosting.
 set -euo pipefail
@@ -29,6 +30,20 @@ json.dump(config, open(path, "w"), indent=4)
 PY
 fi
 [ -x "$DIR/omp-server" ] || { echo "Install failed." >&2; exit 1; }
+
+# Discord invite and website are sent to the launcher with the server info
+if [ -n "${DISCORD:-}" ] || [ -n "${WEBSITE:-}" ]; then
+	python3 - "$DIR/config.json" <<'PY'
+import json, os, sys
+path = sys.argv[1]
+config = json.load(open(path))
+if os.environ.get("DISCORD"):
+    config.setdefault("discord", {})["invite"] = os.environ["DISCORD"]
+if os.environ.get("WEBSITE"):
+    config["website"] = os.environ["WEBSITE"]
+json.dump(config, open(path, "w"), indent=4)
+PY
+fi
 
 echo "==> Starting the server"
 # By process name: it was started as ./omp-server, so a full-path pattern never matches

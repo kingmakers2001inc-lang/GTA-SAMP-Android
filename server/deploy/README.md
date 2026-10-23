@@ -27,6 +27,9 @@ and testing, so use this to play with friends, not as 24/7 public hosting. When 
 restarts, it starts the server and tunnel again by itself (the secret is remembered; the
 startup log is `/tmp/grand-rp-start.log`).
 
+To show a Discord button in the launcher, run it once with your invite:
+`DISCORD=discord.gg/yourcode ./server/deploy/codespace.sh` (it's saved in the config).
+
 ## Install
 
 On the server, as root:
