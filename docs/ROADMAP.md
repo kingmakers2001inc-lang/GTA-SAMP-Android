@@ -20,6 +20,8 @@ Games like Grand Mobile, One State RP and Black Russia are built the same way:
 | On-foot sync | Basic |
 | Vehicles, textdraws, checkpoints, pickups | Not implemented |
 | Server gamemode | `server/` - accounts, jobs, factions, bank, dealership, admin |
+| 64-bit (arm64-v8a, GTA SA 2.11) | Builds and links; needs the 2.11 `libGTASA.so` to verify layouts (see `docs/CLIENT.md`) |
+| APK builder (`tools/make_apk.py`) | Works for single APKs; split APKs from Play installs not yet |
 | Launcher APK | Not started |
 
 ## Milestones

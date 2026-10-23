@@ -3,14 +3,24 @@
 #include <GTASA.h>
 
 #include "CScript.h"
+#include "utils.h"
 
-// Mobile CRunningScript layout (from ProcessOneCommand / UpdateCompareFlag /
-// GetPointerToLocalVariable in libGTASA.so)
-// GetPointerToLocalVariable in libGTASA.so). The and/or counter (0xF0), NOT flag (0xF2)
-// and mission flag (0xFC) must stay zero, which the memset below guarantees.
-#define SCRIPT_OFFSET_IP			0x14
+// Mobile CRunningScript layout (from ProcessOneCommand, UpdateCompareFlag and
+// GetPointerToLocalVariable in libGTASA.so). The and/or counter, NOT flag and mission
+// flag must stay zero, which the memset below guarantees.
+#if defined(__aarch64__)
+// TODO(2.11): read these from the 64-bit ProcessOneCommand. Pointers are 8 bytes there, so
+// every offset after the list links moves. Until then script commands are disabled.
+#define SCRIPT_LAYOUT_KNOWN			0
+#define SCRIPT_OFFSET_IP			0
+#define SCRIPT_OFFSET_LOCALS		0
+#define SCRIPT_OFFSET_COMPARE_FLAG	0
+#else
+#define SCRIPT_LAYOUT_KNOWN			1
+#define SCRIPT_OFFSET_IP			0x14	// and/or counter 0xF0, NOT flag 0xF2, mission flag 0xFC
 #define SCRIPT_OFFSET_LOCALS		0x3C
 #define SCRIPT_OFFSET_COMPARE_FLAG	0xE5
+#endif
 #define SCRIPT_SIZE					0x200
 
 // SCM parameter type tags
@@ -25,6 +35,15 @@ static unsigned char	s_Code[256];
 
 bool ScriptCommand(unsigned short opcode, const char* format, ...)
 {
+	if(!SCRIPT_LAYOUT_KNOWN)
+	{
+		static bool warned = false;
+		if(!warned)
+			log("Script commands are not supported on this build yet");
+		warned = true;
+		return false;
+	}
+	
 	memset(s_Script, 0, sizeof(s_Script));
 	strcpy((char*) s_Script + 8, "samp");
 	

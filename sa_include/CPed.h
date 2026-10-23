@@ -1,6 +1,7 @@
 #ifndef __CPED_H__
 #define __CPED_H__
 
+#include <stddef.h>
 #include "CPhysical.h"
 #include "CVector.h"
 
@@ -125,7 +126,7 @@ public:
 	void SetPedState(ePedState);
 	void SetMoveState(eMoveState);
 	
-	void* operator new(unsigned int);
+	void* operator new(size_t);
 };
 
 #endif

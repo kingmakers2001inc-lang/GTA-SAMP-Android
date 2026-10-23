@@ -4,6 +4,10 @@
 
 CPlayer::CPlayer()
 {
+#if defined(__aarch64__)
+	// CPed's constructor and size come from the 32-bit build; remote peds wait for the 64-bit port
+	return;
+#endif
 	/*
 	m_pPed = new CPlayerPed(1, true);
 	*(unsigned int*)((char *) (m_pPed) + 1432) = 2; //Set type to network player

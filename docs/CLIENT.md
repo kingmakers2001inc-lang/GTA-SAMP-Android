@@ -8,10 +8,29 @@ SA-MP 0.3.7 protocol, which is what open.mp servers (and the `server/` gamemode)
 With a current Android NDK (Linux or macOS):
 
 ```
-NDK=/path/to/android-ndk ./build.sh
+NDK=/path/to/android-ndk ./build.sh                  # out/armeabi-v7a/libSAMP.so
+NDK=/path/to/android-ndk ABI=arm64-v8a ./build.sh    # out/arm64-v8a/libSAMP.so
 ```
 
-The original Windows toolchain (`build.bat` + `Makefile`) still works the same way.
+The original Windows toolchain (`build.bat` + `Makefile`) still builds the 32-bit library.
+
+## Game builds
+
+| Game build | ABI | Status |
+| --- | --- | --- |
+| Early build in `libs/libGTASA.so` | armeabi-v7a | Reverse engineered; everything in this file applies |
+| 2.11 (current Play Store) | arm64-v8a | Port in progress: builds and links, engine layouts not verified yet |
+
+What the 64-bit port has so far:
+
+- Hooks go through `src/hook.*`, using And64InlineHook (`inlinehook/arm64/`) on arm64.
+- The 2D render hook calls the game's own function and draws on top, instead of replacing it.
+- Without a 64-bit `libGTASA.so` in `libs/arm64-v8a/`, `build.sh` links against a stand-in made
+  from the client's imports (`obj-ndk/arm64-v8a/engine_imports.txt`). The real game library is used at runtime.
+- Still to verify against the 2.11 binary: that it exports every import, the `CRunningScript`
+  layout (script commands are disabled on arm64 until then), `AND_TouchEvent`, and the ped
+  class layout used for remote players. Check exports with:
+  `python3 tools/engine_stub.py check --symbols obj-ndk/arm64-v8a/engine_imports.txt --lib path/to/libGTASA.so`
 
 ## Making the APK
 
@@ -22,16 +41,19 @@ turns **your own** GTA: San Andreas APK into the multiplayer APK:
 python3 tools/make_apk.py --apk gta_sa.apk --host your.server.ip --port 7777
 ```
 
-It adds `libSAMP.so`, makes the game load it right after `libGTASA.so`, bakes in the server
-address (optional), then rebuilds, aligns and signs the APK as `GTA-SAMP.apk`. It needs Java,
+It adds `out/<abi>/libSAMP.so` for each ABI the game ships, makes the game load it right after
+`libGTASA.so`, bakes in the server address (optional), then rebuilds, aligns and signs the APK as
+`GTA-SAMP.apk`. Before building it checks that the game's `libGTASA.so` exports everything the
+client imports, so an APK that would fail to start is never produced. It needs Java,
 [apktool](https://apktool.org) and `zipalign` + `apksigner` from the Android SDK build-tools
 (found through `ANDROID_HOME`, or pass `--build-tools`).
 
 Things to know before installing:
 
-- The client only works with the exact game build in `libs/libGTASA.so`
-  (SHA-256 `59e7198de1916d5f7d22037233f385983099fd53cfab07c707ca25b9d7a834d7`); the script refuses other builds unless you pass `--force`.
-- The game is 32-bit (`armeabi-v7a`). Phones without 32-bit app support cannot run it.
+- The script only accepts game builds listed in `KNOWN_GAME_BUILDS` (today the early 32-bit build,
+  SHA-256 `59e7198de1916d5f7d22037233f385983099fd53cfab07c707ca25b9d7a834d7`). `--force` builds a
+  test APK for other builds, which may crash.
+- Play Store installs come as split APKs (`base.apk` + `split_config.*.apk`); those aren't supported yet.
 - Uninstall the original game first (the signature differs) and keep its data files
   (`Android/obb/com.rockstargames.gtasa`).
 - Android 14+ blocks installing apps that target very old Android versions. If you get that error,
