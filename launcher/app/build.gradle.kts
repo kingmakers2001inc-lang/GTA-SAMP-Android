@@ -20,8 +20,8 @@ android {
         applicationId = "com.kingmakers.rp"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
 
         buildConfigField("String", "SERVER_NAME", "\"${prop("kingmakers.serverName")}\"")
         buildConfigField("String", "SERVER_HOST", "\"${prop("kingmakers.serverHost")}\"")

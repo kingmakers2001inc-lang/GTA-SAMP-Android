@@ -31,7 +31,9 @@ fi
 [ -x "$DIR/omp-server" ] || { echo "Install failed." >&2; exit 1; }
 
 echo "==> Starting the server"
-pkill -f "$DIR/omp-server" 2> /dev/null || true
+# By process name: it was started as ./omp-server, so a full-path pattern never matches
+pkill -x omp-server 2> /dev/null || true
+while pgrep -x omp-server > /dev/null; do sleep 1; done
 cd "$DIR"
 nohup ./omp-server < /dev/null > server.log 2>&1 &
 disown
