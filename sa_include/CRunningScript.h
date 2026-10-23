@@ -5,6 +5,7 @@ class CRunningScript
 {
 public:
 	void Process();
+	char ProcessOneCommand();
 };
 
 #endif

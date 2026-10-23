@@ -3,9 +3,24 @@
 
 enum
 {
+	RPC_SetPlayerPos = 12,
+	RPC_SetPlayerHealth = 14,
+	RPC_TogglePlayerControllable = 15,
+	RPC_GivePlayerMoney = 18,
+	RPC_SetPlayerFacingAngle = 19,
+	RPC_ResetPlayerMoney = 20,
 	RPC_ClientJoin = 25,
 	RPC_ServerCommand = 50,
+	RPC_Spawn = 52,
+	RPC_Death = 53,
 	RPC_DialogResponse = 62,
+	RPC_SetSpawnInfo = 68,
+	RPC_TogglePlayerSpectating = 124,
+	RPC_RequestClass = 128,
+	RPC_RequestSpawn = 129,
+	RPC_SetPlayerSkin = 153,
+	RPC_SetPlayerInterior = 156,
+	RPC_SetCameraBehindPlayer = 162,
 	RPC_WorldPlayerAdd = 32,
 	RPC_ScrPlayAudioStream = 41,
 	RPC_ScrDialogBox = 61,
@@ -40,6 +55,19 @@ void ScrInitMenu(RPCParameters *rpcParams);
 void ScrDialogBox(RPCParameters *rpcParams);
 void ScrGameText(RPCParameters *rpcParams);
 void ScrPlayAudioStream(RPCParameters *rpcParams);
+void SetSpawnInfo(RPCParameters *rpcParams);
+void TogglePlayerSpectating(RPCParameters *rpcParams);
+void RequestClass(RPCParameters *rpcParams);
+void RequestSpawn(RPCParameters *rpcParams);
+void SetPlayerPos(RPCParameters *rpcParams);
+void SetPlayerFacingAngle(RPCParameters *rpcParams);
+void SetPlayerSkin(RPCParameters *rpcParams);
+void SetPlayerHealth(RPCParameters *rpcParams);
+void SetPlayerInterior(RPCParameters *rpcParams);
+void TogglePlayerControllable(RPCParameters *rpcParams);
+void GivePlayerMoney(RPCParameters *rpcParams);
+void ResetPlayerMoney(RPCParameters *rpcParams);
+void SetCameraBehindPlayer(RPCParameters *rpcParams);
 void RegisterRPCs(RakClientInterface *pRakClient);
 
 

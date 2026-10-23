@@ -38,15 +38,74 @@ CNetGame::~CNetGame()
 	}
 }
 
+// Defaults baked into the library. tools/make_apk.py finds the magic and rewrites the
+// fields, so a server can ship an APK that already points at it.
+struct DefaultSettings
+{
+	char magic[16];
+	char host[64];
+	char port[8];
+	char name[25];
+};
+extern "C" __attribute__((used)) volatile DefaultSettings g_DefaultSettings =
+	{ "SAMP_DEFAULTS_1", "127.0.0.1", "7777", "Android_Player" };
+
+static void CopyField(char* dest, const volatile char* src, size_t size)
+{
+	size_t i = 0;
+	for(; i < size - 1 && src[i]; i++)
+		dest[i] = src[i];
+	dest[i] = 0;
+}
+
+// Name of this app's package, from /proc/self/cmdline
+static bool GetPackageName(char* out, size_t size)
+{
+	FILE* f = fopen("/proc/self/cmdline", "r");
+	if(!f)
+		return false;
+	
+	bool ok = fgets(out, size, f) != nullptr;
+	fclose(f);
+	
+	// Strip a ":process" suffix
+	if(ok)
+		out[strcspn(out, ":")] = 0;
+	return ok && out[0];
+}
+
+static FILE* OpenSettingsFile(char* path, size_t size)
+{
+	// The game's own data folder is readable on every Android version; /sdcard/SAMP needs legacy storage
+	char package[128];
+	if(GetPackageName(package, sizeof(package)))
+	{
+		snprintf(path, size, "/sdcard/Android/data/%s/files/SAMP/settings.ini", package);
+		if(FILE* f = fopen(path, "r"))
+			return f;
+	}
+	
+	snprintf(path, size, "%s", SAMP_SETTINGS_FILE);
+	return fopen(path, "r");
+}
+
 void CNetGame::LoadSettings()
 {
+	char port[8];
+	CopyField(m_szHost, g_DefaultSettings.host, sizeof(m_szHost));
+	CopyField(port, g_DefaultSettings.port, sizeof(port));
+	CopyField(m_szNickName, g_DefaultSettings.name, sizeof(m_szNickName));
+	m_usPort = (unsigned short) atoi(port);
+	
 	// Optional override file, one "key=value" per line: host, port, name
-	FILE* f = fopen(SAMP_SETTINGS_FILE, "r");
+	char path[256];
+	FILE* f = OpenSettingsFile(path, sizeof(path));
 	if(!f)
 	{
-		log("No %s, using defaults", SAMP_SETTINGS_FILE);
+		log("No settings.ini, using built-in server %s:%d", m_szHost, m_usPort);
 		return;
 	}
+	log("Reading %s", path);
 	
 	char line[128];
 	while(fgets(line, sizeof(line), f))
@@ -111,7 +170,11 @@ void CNetGame::Process()
 		m_rakClientInterface->DeallocatePacket(pPacket);	
 	}
 	
-	if (m_isInGame && g_iNetModeNormalOnfootSendRate > 0 && lastOnFootSyncTick < (GetTickCount() - g_iNetModeNormalOnfootSendRate))
+	if (m_isInGame)
+		m_PlayerPool->GetLocalPlayer()->Process();
+	
+	// The server ignores sync from players that haven't spawned
+	if (m_isInGame && m_PlayerPool->GetLocalPlayer()->IsSpawned() && g_iNetModeNormalOnfootSendRate > 0 && lastOnFootSyncTick < (GetTickCount() - g_iNetModeNormalOnfootSendRate))
 	{
 		DoSync();
 		
@@ -317,6 +380,33 @@ void CNetGame::SendDialogResponse(int a_iDialogID, int a_iButton, int a_iListIte
 	bsSend.Write(byteLen);
 	bsSend.Write(a_szInput, byteLen);
 	SEND_RPC(m_rakClientInterface, DialogResponse, bsSend);
+}
+
+void CNetGame::SendRequestClass(int a_iClassID)
+{
+	RakNet::BitStream bsSend;
+	bsSend.Write((uint16_t) a_iClassID);
+	SEND_RPC(m_rakClientInterface, RequestClass, bsSend);
+}
+
+void CNetGame::SendRequestSpawn()
+{
+	RakNet::BitStream bsSend;
+	SEND_RPC(m_rakClientInterface, RequestSpawn, bsSend);
+}
+
+void CNetGame::SendSpawn()
+{
+	RakNet::BitStream bsSend;
+	SEND_RPC(m_rakClientInterface, Spawn, bsSend);
+}
+
+void CNetGame::SendDeath(int a_iReason, int a_iKillerID)
+{
+	RakNet::BitStream bsSend;
+	bsSend.Write((BYTE) a_iReason);
+	bsSend.Write((uint16_t) a_iKillerID);
+	SEND_RPC(m_rakClientInterface, Death, bsSend);
 }
 
 void CNetGame::Packet_ConnectionSucceeded(Packet *p)

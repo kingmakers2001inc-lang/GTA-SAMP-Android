@@ -3,3 +3,7 @@ obj
 dummy_libs
 obj-ndk
 
+samp-debug.keystore
+*.apk
+out/
+__pycache__/

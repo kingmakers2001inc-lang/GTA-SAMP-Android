@@ -17,18 +17,17 @@ Roleplay gamemode for [open.mp](https://open.mp), the server the Android client 
 
 ## Running it
 
-1. Download the open.mp server for your OS from https://github.com/openmultiplayer/open.mp/releases.
-2. Copy `gamemodes/grand_rp.pwn` and `config.json` into the server folder.
-3. Compile with the bundled Pawn compiler (`qawno/pawncc`):
-   ```
-   pawncc gamemodes/grand_rp.pwn -iqawno/include -ogamemodes/grand_rp.amx -d1 -O1 -;+ -(+
-   ```
-4. Set a real `rcon.password` in `config.json`, then start `omp-server`.
-5. Join, log in to RCON (`/rcon login <password>`) and give yourself staff: `/makeadmin <your id> 5`.
+On an Ubuntu/Debian x86_64 server: `./server/deploy/install.sh` sets everything up as a service.
+See [`deploy/README.md`](deploy/README.md) for hosting options, firewall and admin setup.
+
+Tested with open.mp 1.6.7.3218: the gamemode compiles with the bundled compiler and the mobile
+client's networking code registers, spawns, chats, runs commands and respawns on it.
 
 ## Pointing the Android client at it
 
-The client reads `/sdcard/SAMP/settings.ini` on the phone:
+Easiest: bake your server into the APK with `tools/make_apk.py --host your.server.ip` (see
+`docs/CLIENT.md`). Players can still override it with a `settings.ini` in
+`/sdcard/Android/data/com.rockstargames.gtasa/files/SAMP/` (or `/sdcard/SAMP/`):
 
 ```
 host=your.server.ip

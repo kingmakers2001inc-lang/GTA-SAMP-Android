@@ -12,6 +12,7 @@
 #include "CChat.h"
 #include "CDialog.h"
 #include "CKeyboard.h"
+#include "CScript.h"
 
 std::vector<std::string> g_ChatLines;
 static void Capture(const char* line) { if(!strncmp(line, "[CHAT] ", 7)) g_ChatLines.push_back(line + 7); }
@@ -34,9 +35,58 @@ void CPlayer::setNickName(char* name) { delete [] m_pszNickName; m_pszNickName =
 void CPlayer::setNPC(bool) {}
 void CPlayer::ProcessPlayerSync(Packet*) {}
 void CPlayer::StreamIn(RPCParameters*) {}
-CLocalPlayer::CLocalPlayer() {}
-CLocalPlayer::~CLocalPlayer() {}
-CPlayerPed* CLocalPlayer::GetGTAPlayer() { return nullptr; }
+
+// Engine calls made by CLocalPlayer::CreateGTAPlayer
+static char g_FakePed[4096];
+int CStreaming::RequestSpecialModel(int, const char*, int) { return 0; }
+int CStreaming::LoadAllRequestedModels(bool) { return 0; }
+int CWorld::PlayerInFocus = 0;
+void CPlayerPed::SetupPlayerPed(int) {}
+CPlayerPed* FindPlayerPed(int) { return (CPlayerPed*) g_FakePed; }
+void CClothes::RebuildPlayer(CPlayerPed*, bool) {}
+
+// Script opcodes are recorded instead of run; is_char_dead answers from g_bDead
+struct Opcode { unsigned short op; std::vector<double> args; };
+static std::vector<Opcode> g_Opcodes;
+static bool g_bDead = false;
+static int g_iMoney = 0;
+
+bool ScriptCommand(unsigned short opcode, const char* format, ...)
+{
+	Opcode rec { opcode, {} };
+	va_list args;
+	va_start(args, format);
+	for(const char* f = format; *f; f++)
+	{
+		if(*f == 'i') rec.args.push_back(va_arg(args, int));
+		else if(*f == 'f') rec.args.push_back(va_arg(args, double));
+		else if(*f == 'v')
+		{
+			int* out = va_arg(args, int*);
+			*out = (opcode == OP_GET_PLAYER_CHAR) ? 1 : g_iMoney;
+		}
+	}
+	va_end(args);
+	
+	if(opcode == OP_ADD_SCORE) g_iMoney += (int) rec.args[1];
+	if(opcode != OP_IS_CHAR_DEAD) g_Opcodes.push_back(rec);
+	return opcode == OP_IS_CHAR_DEAD && g_bDead;
+}
+
+// Last recorded call of an opcode, or nullptr
+static const Opcode* Last(unsigned short op)
+{
+	for(int i = g_Opcodes.size() - 1; i >= 0; i--)
+		if(g_Opcodes[i].op == op) return &g_Opcodes[i];
+	return nullptr;
+}
+
+static int g_iClientFailures = 0;
+static void ClientCheck(bool ok, const char* what)
+{
+	printf("[client] %s %s\n", ok ? "PASS" : "FAIL", what);
+	if(!ok) g_iClientFailures++;
+}
 
 // --- GUI stubs: 1920x1080, fixed-width font ------------------------------------
 struct Label { std::string text; float x, y, w, h; };
@@ -107,6 +157,7 @@ int main()
 {
 	CNetGame* net = CNetGame::Instance();
 	strcpy(net->m_szNickName, "John_Smith");
+	net->getPlayerPool()->GetLocalPlayer()->CreateGTAPlayer();
 	net->Connect();
 	
 	// Wait for the login dialog
@@ -128,7 +179,17 @@ int main()
 	Type("secret123");
 	Tap("Send");
 	printf("[client] dialog closed=%d\n", !CDialog::IsOpen());
-	Pump(300);
+	Pump(500);
+	
+	CLocalPlayer* local = net->getPlayerPool()->GetLocalPlayer();
+	const Opcode* coords = Last(OP_SET_CHAR_COORDINATES);
+	const Opcode* model = Last(OP_SET_PLAYER_MODEL);
+	const Opcode* control = Last(OP_SET_PLAYER_CONTROL);
+	ClientCheck(local->IsSpawned(), "spawned after login");
+	ClientCheck(coords && coords->args.size() == 4 && (int) coords->args[1] == 1742 && (int) coords->args[2] == -1861, "placed at the server spawn point");
+	ClientCheck(model && (int) model->args[1] == 280, "skin from SetPlayerSkin applied");
+	ClientCheck(control && control->args[1] == 1, "player control enabled");
+	ClientCheck(g_iMoney == 5000, "money reset then set to 5000");
 	
 	// Chat: open with the Chat button, send a message and a command
 	Tap("Chat");
@@ -146,7 +207,14 @@ int main()
 	Tap("Send");
 	Pump(1000);
 	
+	// Die, then let the "engine" revive the ped: the client must report and respawn
+	g_bDead = true;
+	Pump(300);
+	g_bDead = false;
+	Pump(1000);
+	ClientCheck(local->IsSpawned(), "spawned again after death");
+	
 	printf("[client] chat window:\n");
 	for(auto& line : g_ChatLines) printf("    | %s\n", line.c_str());
-	return 0;
+	return g_iClientFailures ? 1 : 0;
 }

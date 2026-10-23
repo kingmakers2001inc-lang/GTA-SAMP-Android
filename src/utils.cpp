@@ -23,6 +23,8 @@ int log(const char *format, ...)
    return done;
 }
 
+// 32-bit Thumb patching helpers; arm64 builds hook through InstallHook (hook.cpp) only
+#if !defined(__aarch64__)
 int memcpy_protect(void* to, void* from, int len)
 {	
 	int result = 0;
@@ -97,3 +99,4 @@ void ARMBIGJMP(void* from, void* to)
 	
 	memcpy_protect((void*)((unsigned long)(from) & 0xFFFFFFFE), hookdata, 16);
 }
+#endif

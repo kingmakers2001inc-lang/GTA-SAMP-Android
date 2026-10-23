@@ -3,7 +3,7 @@
 #include "CNetGame.h"
 #include "utils.h"
 #include "CGUI.h"
-#include "inlineHook.h"
+#include "hook.h"
 
 #define MAX_TOUCH_POINTERS	16
 
@@ -18,10 +18,13 @@ int CRunningScript__Process_hook(void* p)
 		CNetGame* 	l_pNetGame = CNetGame::Instance();
 		CPlayerPed*	l_pLocalPlayer = l_pNetGame->getPlayerPool()->GetLocalPlayer()->CreateGTAPlayer();
 		
+#if !defined(__aarch64__)
+		// Virtual call through the reversed 32-bit CPed vtable; not verified on 64-bit builds
 		if(l_pLocalPlayer)
 		{
 			l_pLocalPlayer->Teleport(CVector(0.0f, 0.0f, 3.0f), 0);
 		}
+#endif
 		
 		CNetGame::Instance()->Connect();	
 	}
@@ -100,6 +103,16 @@ void RenderDebugOverlay()
 	PrintLine("g_iNetModeNormalOnfootSendRate: %i", g_iNetModeNormalOnfootSendRate);
 }
 
+#if defined(__aarch64__)
+static void (*Render2dStuffAfterFade_orig)() = nullptr;
+
+// Newer game builds draw more here (touch controls etc.), so run theirs and draw on top
+void Render2dStuffAfterFade_hook()
+{
+	Render2dStuffAfterFade_orig();
+	GUI::Render();
+}
+#else
 void Render2dStuffAfterFade_hook()
 {
 	CHud::DrawAfterFade();
@@ -115,6 +128,7 @@ void Render2dStuffAfterFade_hook()
 	CCredits::Render();
 	emu_GammaSet(0);
 }
+#endif
 
 static void (*AND_TouchEvent_orig)(int, int, int, int) = nullptr;
 static bool s_bTouchCaptured[MAX_TOUCH_POINTERS];
@@ -155,20 +169,24 @@ template<typename T> void* MemberAddress(T func)
 void InitHooks()
 {
 	// Remove script processing
-	ARMBIGJMP(MemberAddress(&CRunningScript::Process), (void *)(CRunningScript__Process_hook));
+	InstallHook(MemberAddress(&CRunningScript::Process), (void *)(CRunningScript__Process_hook));
 	
 	// Remove population spawning
-	ARMBIGJMP((void *)(CPopCycle::Update), (void *)(CPopCycle__Update_hook));
+	InstallHook((void *)(CPopCycle::Update), (void *)(CPopCycle__Update_hook));
 	
 	// Hook the loading screen function
-	ARMBIGJMP((void *)(LoadingScreen), (void *)(LoadingScreen_hook));
+	InstallHook((void *)(LoadingScreen), (void *)(LoadingScreen_hook));
 	
 	// Hook render
-	ARMBIGJMP((void *)(Render2dStuffAfterFade), (void *)(Render2dStuffAfterFade_hook));
+#if defined(__aarch64__)
+	if(!InstallHook((void *)(Render2dStuffAfterFade), (void *)(Render2dStuffAfterFade_hook), (void **) &Render2dStuffAfterFade_orig))
+		log("Failed to hook Render2dStuffAfterFade, no UI");
+#else
+	InstallHook((void *)(Render2dStuffAfterFade), (void *)(Render2dStuffAfterFade_hook));
+#endif
 	
-	// Touch input for chat and dialogs. This hook calls the original, so it needs a relocating trampoline
-	if(registerInlineHook((uint32_t) AND_TouchEvent, (uint32_t) AND_TouchEvent_hook, (uint32_t**) &AND_TouchEvent_orig) != ELE7EN_OK
-		|| inlineHook((uint32_t) AND_TouchEvent) != ELE7EN_OK)
+	// Touch input for chat and dialogs. This hook calls the original
+	if(!InstallHook((void *) AND_TouchEvent, (void *) AND_TouchEvent_hook, (void **) &AND_TouchEvent_orig))
 	{
 		log("Failed to hook AND_TouchEvent, touch UI disabled");
 	}
