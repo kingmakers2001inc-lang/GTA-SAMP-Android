@@ -53,7 +53,12 @@ Things to know before installing:
 - The script only accepts game builds listed in `KNOWN_GAME_BUILDS` (today the early 32-bit build,
   SHA-256 `59e7198de1916d5f7d22037233f385983099fd53cfab07c707ca25b9d7a834d7`). `--force` builds a
   test APK for other builds, which may crash.
-- Play Store installs come as split APKs (`base.apk` + `split_config.*.apk`); those aren't supported yet.
+- Play Store installs come as split APKs (`base.apk` + `split_config.*.apk`). Export the installed
+  game with an APK extractor (for example ML Manager) as a bundle and pass it directly
+  (`--apk GTA.apks`), or pass `--apk base.apk --split split_config.arm64_v8a.apk ...`. The output
+  is then `GTA-SAMP.apks`: install it with SAI (Split APKs Installer). Every piece is re-signed with
+  the same key, and `libSAMP.so` is added to the split that holds the game library, uncompressed
+  and page-aligned.
 - Uninstall the original game first (the signature differs) and keep its data files
   (`Android/obb/com.rockstargames.gtasa`).
 - Android 14+ blocks installing apps that target very old Android versions. If you get that error,
