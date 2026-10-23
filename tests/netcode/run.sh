@@ -66,7 +66,7 @@ CLI_FLAGS=(-std=c++11 -O1 -g -w -fpermissive -Wno-narrowing -DHOST_ENDIAN_IS_LIT
 RNFILES=$(sed -n '/^RNFILES/,/samp_netencr/p' Makefile | tr -d '\\' | sed 's/RNFILES =//' | tr ' \t' '\n\n' | grep '\.cpp$' | sed 's|^|raknet/|')
 rm -f "$WORK"/cli/*.o
 echo "building client harness"
-for f in $RNFILES src/CNetGame.cpp src/RPC.cpp src/CPlayerPool.cpp src/CChat.cpp src/CDialog.cpp src/CKeyboard.cpp; do
+for f in $RNFILES src/CNetGame.cpp src/RPC.cpp src/CPlayerPool.cpp src/CLocalPlayer.cpp src/CChat.cpp src/CDialog.cpp src/CKeyboard.cpp; do
 	g++ "${CLI_FLAGS[@]}" -c "$f" -o "$WORK/cli/$(echo "$f" | tr / _).o"
 done
 g++ "${CLI_FLAGS[@]}" "$HERE/client_harness.cpp" "$WORK"/cli/*.o -lpthread -o "$WORK/client_harness"
@@ -75,8 +75,9 @@ g++ "${CLI_FLAGS[@]}" "$HERE/client_harness.cpp" "$WORK"/cli/*.o -lpthread -o "$
 "$WORK/omp_server" > "$WORK/server.log" 2>&1 &
 SERVER_PID=$!
 sleep 1
-timeout 20 "$WORK/client_harness" > "$WORK/client.log" 2>&1 || true
-wait $SERVER_PID && RESULT=0 || RESULT=1
+timeout 20 "$WORK/client_harness" > "$WORK/client.log" 2>&1 && CLIENT=0 || CLIENT=1
+wait $SERVER_PID && SERVER=0 || SERVER=1
+RESULT=$((CLIENT | SERVER))
 
 grep -v "Packet received" "$WORK/client.log"
 cat "$WORK/server.log"

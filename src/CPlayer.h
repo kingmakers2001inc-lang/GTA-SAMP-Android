@@ -8,9 +8,9 @@
 
 #define MAX_SKILL_LEVEL 11
 
+#pragma pack(push, 1)
 typedef struct ON_FOOT_SYNC_t // size 0x44
 {
-#pragma pack( 1 )
 	uint16_t			leftRightKeysOnfoot;					// + 0x0000
 	uint16_t			updownKeysOnfoot;						// + 0x0002
 	uint16_t			keysOnfoot;								// + 0x0004
@@ -25,6 +25,8 @@ typedef struct ON_FOOT_SYNC_t // size 0x44
 	_VehicleID			surfingVehicleID;						// + 0x003E	
 	uint32_t			animationIndex;							// + 0x0040
 } ON_FOOT_SYNC;
+static_assert(sizeof(ON_FOOT_SYNC) == 0x44, "on-foot sync must match the wire format");
+#pragma pack(pop)
 
 class CPlayer
 {

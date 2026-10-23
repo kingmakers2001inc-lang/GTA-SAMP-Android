@@ -111,7 +111,11 @@ void CNetGame::Process()
 		m_rakClientInterface->DeallocatePacket(pPacket);	
 	}
 	
-	if (m_isInGame && g_iNetModeNormalOnfootSendRate > 0 && lastOnFootSyncTick < (GetTickCount() - g_iNetModeNormalOnfootSendRate))
+	if (m_isInGame)
+		m_PlayerPool->GetLocalPlayer()->Process();
+	
+	// The server ignores sync from players that haven't spawned
+	if (m_isInGame && m_PlayerPool->GetLocalPlayer()->IsSpawned() && g_iNetModeNormalOnfootSendRate > 0 && lastOnFootSyncTick < (GetTickCount() - g_iNetModeNormalOnfootSendRate))
 	{
 		DoSync();
 		
@@ -317,6 +321,33 @@ void CNetGame::SendDialogResponse(int a_iDialogID, int a_iButton, int a_iListIte
 	bsSend.Write(byteLen);
 	bsSend.Write(a_szInput, byteLen);
 	SEND_RPC(m_rakClientInterface, DialogResponse, bsSend);
+}
+
+void CNetGame::SendRequestClass(int a_iClassID)
+{
+	RakNet::BitStream bsSend;
+	bsSend.Write((uint16_t) a_iClassID);
+	SEND_RPC(m_rakClientInterface, RequestClass, bsSend);
+}
+
+void CNetGame::SendRequestSpawn()
+{
+	RakNet::BitStream bsSend;
+	SEND_RPC(m_rakClientInterface, RequestSpawn, bsSend);
+}
+
+void CNetGame::SendSpawn()
+{
+	RakNet::BitStream bsSend;
+	SEND_RPC(m_rakClientInterface, Spawn, bsSend);
+}
+
+void CNetGame::SendDeath(int a_iReason, int a_iKillerID)
+{
+	RakNet::BitStream bsSend;
+	bsSend.Write((BYTE) a_iReason);
+	bsSend.Write((uint16_t) a_iKillerID);
+	SEND_RPC(m_rakClientInterface, Death, bsSend);
 }
 
 void CNetGame::Packet_ConnectionSucceeded(Packet *p)

@@ -130,6 +130,9 @@ void InitGame(RPCParameters *rpcParams)
 	CChat::AddInfoMessage("Connected to {FFFFFF}%.64s", g_szHostName);
 	
 	l_pNetGame->m_isInGame = true;
+	
+	// No class selection screen: request the first class straight away
+	l_pNetGame->SendRequestClass(0);
 }
 
 void WorldPlayerAdd(RPCParameters *rpcParams)
@@ -278,6 +281,139 @@ void ScrPlayAudioStream(RPCParameters *rpcParams)
 	log("ScrPlayAudioStream called!");
 }
 
+#define RPC_STREAM(name) RakNet::BitStream name(rpcParams->input, rpcParams->numberOfBitsOfData / 8 + 1, false)
+
+static CLocalPlayer* LocalPlayer()
+{
+	return CNetGame::Instance()->getPlayerPool()->GetLocalPlayer();
+}
+
+// Shared tail of SetSpawnInfo and the class response (0.3.7 layout, no custom skin)
+static void ReadSpawnInfo(RakNet::BitStream& bsData, SpawnInfo& info)
+{
+	uint32_t skin;
+	unsigned char unknown;
+	
+	bsData.Read(info.team);
+	bsData.Read(skin);
+	bsData.Read(unknown);
+	bsData.Read(info.position.x);
+	bsData.Read(info.position.y);
+	bsData.Read(info.position.z);
+	bsData.Read(info.angle);
+	for(int i = 0; i < 3; i++)
+		bsData.Read(info.weapons[i]);
+	for(int i = 0; i < 3; i++)
+		bsData.Read(info.ammo[i]);
+	info.skin = (int) skin;
+}
+
+void SetSpawnInfo(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	SpawnInfo info;
+	ReadSpawnInfo(bsData, info);
+	LocalPlayer()->SetSpawnInfo(info);
+}
+
+void TogglePlayerSpectating(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	uint32_t enable;
+	bsData.Read(enable);
+	LocalPlayer()->SetSpectating(enable != 0);
+}
+
+void RequestClass(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	unsigned char selectable;
+	SpawnInfo info;
+	bsData.Read(selectable);
+	ReadSpawnInfo(bsData, info);
+	LocalPlayer()->OnClassResponse(selectable != 0, info);
+}
+
+void RequestSpawn(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	uint32_t allow;
+	bsData.Read(allow);
+	LocalPlayer()->OnSpawnResponse(allow);
+}
+
+void SetPlayerPos(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	CVector position;
+	bsData.Read(position.x);
+	bsData.Read(position.y);
+	bsData.Read(position.z);
+	LocalPlayer()->SetPosition(position);
+}
+
+void SetPlayerFacingAngle(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	float angle;
+	bsData.Read(angle);
+	LocalPlayer()->SetHeading(angle);
+}
+
+void SetPlayerSkin(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	uint32_t playerID, skin;
+	bsData.Read(playerID);
+	bsData.Read(skin);
+	
+	// Remote player skins need remote ped support first
+	if(playerID == CNetGame::Instance()->getPlayerPool()->getLocalPlayerID())
+		LocalPlayer()->SetSkin(skin);
+}
+
+void SetPlayerHealth(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	float health;
+	bsData.Read(health);
+	LocalPlayer()->SetHealth(health);
+}
+
+void SetPlayerInterior(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	unsigned char interior;
+	bsData.Read(interior);
+	LocalPlayer()->SetInterior(interior);
+}
+
+void TogglePlayerControllable(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	unsigned char enable;
+	bsData.Read(enable);
+	LocalPlayer()->SetControllable(enable != 0);
+}
+
+void GivePlayerMoney(RPCParameters *rpcParams)
+{
+	RPC_STREAM(bsData);
+	int32_t amount;
+	bsData.Read(amount);
+	LocalPlayer()->GiveMoney(amount);
+}
+
+void ResetPlayerMoney(RPCParameters *rpcParams)
+{
+	LocalPlayer()->ResetMoney();
+}
+
+void SetCameraBehindPlayer(RPCParameters *rpcParams)
+{
+	LocalPlayer()->CameraBehind();
+}
+
 void RegisterRPCs(RakClientInterface *pRakClient)
 {
 	REGISTER_STATIC_RPC(pRakClient, ServerJoin);
@@ -297,4 +433,18 @@ void RegisterRPCs(RakClientInterface *pRakClient)
 	REGISTER_STATIC_RPC(pRakClient, ScrDialogBox);
 	REGISTER_STATIC_RPC(pRakClient, ScrGameText);
 	REGISTER_STATIC_RPC(pRakClient, ScrPlayAudioStream);
+	
+	REGISTER_STATIC_RPC(pRakClient, SetSpawnInfo);
+	REGISTER_STATIC_RPC(pRakClient, TogglePlayerSpectating);
+	REGISTER_STATIC_RPC(pRakClient, RequestClass);
+	REGISTER_STATIC_RPC(pRakClient, RequestSpawn);
+	REGISTER_STATIC_RPC(pRakClient, SetPlayerPos);
+	REGISTER_STATIC_RPC(pRakClient, SetPlayerFacingAngle);
+	REGISTER_STATIC_RPC(pRakClient, SetPlayerSkin);
+	REGISTER_STATIC_RPC(pRakClient, SetPlayerHealth);
+	REGISTER_STATIC_RPC(pRakClient, SetPlayerInterior);
+	REGISTER_STATIC_RPC(pRakClient, TogglePlayerControllable);
+	REGISTER_STATIC_RPC(pRakClient, GivePlayerMoney);
+	REGISTER_STATIC_RPC(pRakClient, ResetPlayerMoney);
+	REGISTER_STATIC_RPC(pRakClient, SetCameraBehindPlayer);
 }

@@ -34,6 +34,17 @@ Connection progress, server messages and errors (wrong version, bad name, full s
 | Dialogs | `src/CDialog.*` | All six SA-MP styles; drag to scroll lists, tap the selected item again to confirm |
 | Keyboard | `src/CKeyboard.*` | Letters/symbols layers, one-shot shift, password masking |
 
+## Spawning
+
+After `InitGame` the client requests class 0. Servers that gate spawning behind a login (like
+`server/`) put the player in spectator mode; `TogglePlayerSpectating(false)` or `SpawnPlayer()`
+then spawns them at the spawn info the server sent. After a death the client reports it and asks
+to spawn again once the engine revives the ped.
+
+Position, heading, skin, health, interior, money and controls are applied by running single SCM
+opcodes through the engine's interpreter (`src/CScript.*`), like the PC SA-MP client does, rather
+than writing to struct offsets.
+
 Touches the UI accepts never reach the game. Dialogs and the keyboard are modal while open.
 
 Sizes, colours and the font scale are constants at the top of each file. They were chosen without a
@@ -46,5 +57,7 @@ tests/netcode/run.sh
 ```
 
 Builds open.mp's server RakNet (pinned commit) and the client's networking + UI code for the host,
-then runs a full session: connect, auth, login dialog typed on the touch keyboard, chat and a command.
+then runs a full session: connect, auth, login dialog typed on the touch keyboard, spawn, chat, a command,
+death and respawn. Engine calls are recorded instead of run, so the test also checks what the client
+told the engine to do (spawn point, skin, money, controls).
 It needs only `git`, `g++` and `python3`, and it is the quickest way to catch protocol regressions.

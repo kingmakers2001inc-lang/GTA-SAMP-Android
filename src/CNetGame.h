@@ -46,6 +46,10 @@ public:
 	void SendChatMessage(const char* a_szText);
 	void SendCommand(const char* a_szCommand);
 	void SendDialogResponse(int a_iDialogID, int a_iButton, int a_iListItem, const char* a_szInput);
+	void SendRequestClass(int a_iClassID);
+	void SendRequestSpawn();
+	void SendSpawn();
+	void SendDeath(int a_iReason, int a_iKillerID);
 	
 	static CNetGame* Instance()
 	{

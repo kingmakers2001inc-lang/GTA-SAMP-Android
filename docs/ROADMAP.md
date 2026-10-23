@@ -15,7 +15,9 @@ Games like Grand Mobile, One State RP and Black Russia are built the same way:
 | Connection to open.mp / SA-MP 0.3.7 servers | Working: 0.3.7 cipher, connection cookie, auth keys, packet IDs, version 4057. Covered by `tests/netcode/run.sh` |
 | Chat window, `/commands`, on-screen keyboard | Implemented, protocol tested; on-device layout needs tuning |
 | Dialogs (msgbox, input, password, list, tablist) | Implemented, protocol tested; on-device layout needs tuning |
-| Spawn flow, on-foot sync | Basic / not implemented |
+| Spawn flow (class request, spectate during login, spawn, death and respawn) | Implemented through engine script opcodes, protocol tested |
+| Server-driven player state (position, angle, skin, health, interior, money, controls, camera) | Implemented, protocol tested |
+| On-foot sync | Basic |
 | Vehicles, textdraws, checkpoints, pickups | Not implemented |
 | Server gamemode | `server/` - accounts, jobs, factions, bank, dealership, admin |
 | Launcher APK | Not started |
@@ -23,8 +25,8 @@ Games like Grand Mobile, One State RP and Black Russia are built the same way:
 ## Milestones
 
 ### 1. Playable multiplayer (client)
-- Spawn flow: `RequestClass`/`RequestSpawn`/`Spawn`, `TogglePlayerSpectating`, `SetSpawnInfo` - needed right after the login dialog.
-- Core RPCs: `SetPlayerPos`, `GivePlayerMoney`/`ResetPlayerMoney`, `SetPlayerSkin`, `SetPlayerHealth`, `GameText`.
+- Remaining player RPCs: `SetPlayerArmour`, `GivePlayerWeapon`/`ResetPlayerWeapons`, `GameText`, `SetPlayerTime`/`SetPlayerWeather`.
+- Class selection screen for servers that use one (today the client takes the first class).
 - Remote players: create/destroy peds on stream in/out, interpolate 0.3.7 on-foot sync.
 - Vehicles: `WorldVehicleAdd/Remove`, driver and passenger sync.
 - Checkpoints and pickups (used by jobs and the dealership).
