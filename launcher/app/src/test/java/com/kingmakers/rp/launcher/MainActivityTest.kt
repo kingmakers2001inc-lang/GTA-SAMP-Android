@@ -30,7 +30,7 @@ class MainActivityTest {
             scenario.onActivity { activity ->
                 val list = activity.findViewById<LinearLayout>(R.id.server_list)
                 assertEquals(1, list.childCount)
-                assertEquals("127.0.0.1:7777", list.getChildAt(0).findViewById<TextView>(R.id.address).text)
+                assertEquals("${BuildConfig.SERVER_HOST}:${BuildConfig.SERVER_PORT}", list.getChildAt(0).findViewById<TextView>(R.id.address).text)
 
                 // An invalid name blocks Play with an error
                 activity.findViewById<View>(R.id.play).performClick()
