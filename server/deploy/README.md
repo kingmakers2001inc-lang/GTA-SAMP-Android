@@ -9,6 +9,23 @@ Phones and ARM servers (including Oracle's free ARM instances) can't run open.mp
 | Google Cloud free tier (e2-micro, US regions) | free | Fine for testing and a few players |
 | Your own Linux PC | free | Only online while it's on; forward UDP 7777 on your router |
 
+## Free testing: GitHub Codespaces + playit.gg (no card, works from a phone)
+
+1. Open the repository on GitHub in your browser, switch to this branch, then
+   **Code → Codespaces → Create codespace**. Wait for the terminal to appear.
+2. In the codespace terminal: `./server/deploy/codespace.sh`. It installs and starts the
+   server and prints the RCON password.
+3. On https://playit.gg sign up (free, no card), add an agent with the **Docker / secret key**
+   setup and copy the secret key. Then in the terminal:
+   `PLAYIT_SECRET=<key> ./server/deploy/codespace.sh`
+4. On playit.gg: **Tunnels → Create tunnel**, type **UDP** (or the SA-MP preset), local
+   address `127.0.0.1`, port `7777`. Put the public address it shows into the launcher.
+
+Codespaces stop after about 30 minutes without activity (raise it to 4 hours in GitHub
+Settings → Codespaces) and give around 60 free hours a month. They're meant for development
+and testing, so use this to play with friends, not as 24/7 public hosting. When the codespace
+restarts, run `./server/deploy/codespace.sh` again (the secret is remembered).
+
 ## Install
 
 On the server, as root:
