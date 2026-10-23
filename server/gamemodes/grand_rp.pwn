@@ -6,8 +6,11 @@
  *   - Levels, experience and hourly paycheck
  *   - Proximity chat and RP commands (/me /do /b /s /w)
  *   - Bank with deposit/withdraw/transfer
- *   - Jobs: trucker (delivery routes) and taxi driver (fares)
+ *   - Jobs: trucker, taxi driver, mechanic and pizza delivery
  *   - Factions: LSPD and medics, with ranks, duty and radio chat
+ *   - Gangs: Grove Street and Ballas, with turfs on the map and turf wars (/capture)
+ *   - Houses: buy, sell, lock and enter, created in-game by admins
+ *   - Phone: every character has a number for /call and /sms
  *   - Car dealership with personal, saved and lockable vehicles
  *   - Admin levels and basic moderation tools
  */
@@ -47,14 +50,26 @@
 #define DIALOG_DEALERSHIP       3
 #define DIALOG_HELP             4
 
+#define MAX_HOUSES              200
+#define HOUSE_VW_BASE           1000
+#define PHONE_BASE              100000
+#define TURF_CAPTURE_TIME       120
+#define TURF_COOLDOWN           600
+#define TURF_REWARD             2000
+
 #define JOB_NONE                0
 #define JOB_TRUCKER             1
 #define JOB_TAXI                2
+#define JOB_MECHANIC            3
+#define JOB_PIZZA               4
+#define MAX_JOBS                5
 
 #define FACTION_NONE            0
 #define FACTION_LSPD            1
 #define FACTION_MEDIC           2
-#define MAX_FACTIONS            3
+#define FACTION_GROVE           3
+#define FACTION_BALLAS          4
+#define MAX_FACTIONS            5
 #define MAX_RANK                6
 
 // Locations
@@ -84,6 +99,14 @@
 #define TRUCK_DEPOT_Y           -2240.0
 #define TRUCK_DEPOT_Z           13.5
 
+#define GARAGE_X                2063.0
+#define GARAGE_Y                -1831.0
+#define GARAGE_Z                13.5
+
+#define PIZZA_X                 2105.5
+#define PIZZA_Y                 -1806.5
+#define PIZZA_Z                 13.5
+
 enum E_PLAYER
 {
     pID,
@@ -110,7 +133,10 @@ enum E_PLAYER
     bool:pOnDuty,
     pDeliveryStage,
     pDeliveryRoute,
-    pFareRate
+    pFareRate,
+    pCallPartner,               // playerid + 1 of the other phone, 0 when not calling
+    bool:pCallActive,
+    bool:pCallRinging           // someone is calling this player
 };
 new Player[MAX_PLAYERS][E_PLAYER];
 
@@ -157,15 +183,84 @@ new const TruckRoutes[][E_ROUTE] =
     {"Angel Pine",        -2145.0, -2453.0, 30.6, 2200}
 };
 
-new const FactionNames[MAX_FACTIONS][] = {"Civilian", "Los Santos Police", "Los Santos Medics"};
-new const FactionRanks[MAX_FACTIONS][MAX_RANK + 1][] =
+new const PizzaRoutes[][E_ROUTE] =
+{
+    {"Grove Street",       2495.0, -1680.0, 13.3, 450},
+    {"Unity Station",      1772.0, -1900.0, 13.5, 350},
+    {"Jefferson Motel",    2228.0, -1159.0, 25.8, 550},
+    {"Glen Park",          1968.0, -1180.0, 20.0, 500},
+    {"Idlewood gas station", 1940.0, -1772.0, 13.4, 300},
+    {"East Los Santos",    2440.0, -1300.0, 24.0, 600}
+};
+
+new const FactionNames[MAX_FACTIONS][] =
+    {"Civilian", "Los Santos Police", "Los Santos Medics", "Grove Street Families", "Ballas"};
+new const FactionRanks[MAX_FACTIONS][MAX_RANK + 1][16] =
 {
     {"", "", "", "", "", "", ""},
     {"", "Cadet", "Officer", "Sergeant", "Lieutenant", "Captain", "Chief"},
-    {"", "Intern", "Paramedic", "Doctor", "Surgeon", "Head Doctor", "Director"}
+    {"", "Intern", "Paramedic", "Doctor", "Surgeon", "Head Doctor", "Director"},
+    {"", "Youngster", "Hustler", "Homie", "Soldier", "OG", "Big Smoke"},
+    {"", "Youngster", "Hustler", "Thug", "Soldier", "OG", "Ballas King"}
 };
-new const FactionSkins[MAX_FACTIONS] = {0, 280, 274};
-new const JobNames[][] = {"Unemployed", "Trucker", "Taxi driver"};
+new const FactionSkins[MAX_FACTIONS] = {0, 280, 274, 105, 102};
+new const FactionColours[MAX_FACTIONS] = {0xFFFFFF00, 0x0000FFFF, 0xFF8282FF, 0x00C000FF, 0xC000C0FF};
+new const JobNames[MAX_JOBS][] = {"Unemployed", "Trucker", "Taxi driver", "Mechanic", "Pizza delivery"};
+
+enum E_HOUSE_INTERIOR
+{
+    hiName[16],
+    hiInterior,
+    Float:hiX,
+    Float:hiY,
+    Float:hiZ
+};
+new const HouseInteriors[][E_HOUSE_INTERIOR] =
+{
+    {"Small",   1, 223.20, 1287.08, 1082.14},
+    {"Medium",  3, 2496.05, -1692.08, 1014.74},
+    {"Large",   8, 2365.31, -1135.60, 1050.88},
+    {"Villa",   9, 2317.89, -1026.76, 1050.22},
+    {"Mansion", 5, 140.17, 1366.07, 1083.86}
+};
+
+enum E_HOUSE
+{
+    hDBID,
+    hOwner,                     // account id, 0 when for sale
+    hOwnerName[MAX_PLAYER_NAME + 1],
+    hPrice,
+    hType,
+    Float:hX,
+    Float:hY,
+    Float:hZ,
+    bool:hLocked,
+    hPickup,                    // pickup id + 1, 0 when none
+    Text3D:hLabel,
+    bool:hHasLabel
+};
+new House[MAX_HOUSES][E_HOUSE];
+
+enum E_TURF
+{
+    tName[24],
+    Float:tMinX,
+    Float:tMinY,
+    Float:tMaxX,
+    Float:tMaxY,
+    tDefaultOwner
+};
+new const Turfs[][E_TURF] =
+{
+    {"Grove Street",  2380.0, -1730.0, 2540.0, -1620.0, FACTION_GROVE},
+    {"Ganton Gym",    2200.0, -1780.0, 2340.0, -1650.0, FACTION_GROVE},
+    {"Idlewood",      1960.0, -1800.0, 2160.0, -1650.0, FACTION_GROVE},
+    {"Jefferson",     2040.0, -1340.0, 2240.0, -1100.0, FACTION_BALLAS},
+    {"East Los Santos", 2380.0, -1400.0, 2600.0, -1200.0, FACTION_BALLAS},
+    {"Glen Park",     1860.0, -1300.0, 2040.0, -1130.0, FACTION_BALLAS}
+};
+new TurfOwner[sizeof Turfs], TurfZone[sizeof Turfs], TurfAttacker[sizeof Turfs], TurfTimeLeft[sizeof Turfs],
+    TurfCooldown[sizeof Turfs];
 
 new DB:gDB;
 
@@ -334,6 +429,25 @@ stock GenerateSalt(salt[], size = sizeof salt)
     salt[size - 1] = EOS;
 }
 
+stock bool:IsGang(faction)
+{
+    return faction == FACTION_GROVE || faction == FACTION_BALLAS;
+}
+
+stock PhoneNumber(playerid)
+{
+    return PHONE_BASE + Player[playerid][pID];
+}
+
+stock FindPhone(number)
+{
+    for (new i = 0; i < MAX_PLAYERS; i++)
+    {
+        if (IsPlayerConnected(i) && Player[i][pLoggedIn] && PhoneNumber(i) == number) return i;
+    }
+    return INVALID_PLAYER_ID;
+}
+
 stock bool:CheckAdmin(playerid, level)
 {
     if (Player[playerid][pAdmin] >= level) return true;
@@ -377,6 +491,13 @@ stock InitDatabase()
         "CREATE TABLE IF NOT EXISTS bans (\
             name TEXT PRIMARY KEY COLLATE NOCASE, reason TEXT, admin TEXT,\
             date INTEGER DEFAULT (strftime('%%s','now')))"));
+    DB_FreeResultSet(DB_ExecuteQuery(gDB,
+        "CREATE TABLE IF NOT EXISTS houses (\
+            id INTEGER PRIMARY KEY AUTOINCREMENT,\
+            owner INTEGER DEFAULT 0, price INTEGER NOT NULL, type INTEGER DEFAULT 0,\
+            x REAL, y REAL, z REAL, locked INTEGER DEFAULT 1)"));
+    DB_FreeResultSet(DB_ExecuteQuery(gDB,
+        "CREATE TABLE IF NOT EXISTS turfs (id INTEGER PRIMARY KEY, owner INTEGER NOT NULL)"));
     print("[Grand RP] Database ready.");
 }
 
@@ -452,6 +573,222 @@ stock CountOwnedVehicles(playerid)
 }
 
 // ---------------------------------------------------------------------------
+// Houses
+// ---------------------------------------------------------------------------
+
+stock RefreshHouse(h)
+{
+    if (House[h][hPickup]) DestroyPickup(House[h][hPickup] - 1);
+    House[h][hPickup] = CreatePickup(House[h][hOwner] ? 1272 : 1273, 1, House[h][hX], House[h][hY], House[h][hZ], 0) + 1;
+
+    new text[160];
+    if (House[h][hOwner])
+    {
+        format(text, sizeof text, "{33CCFF}%s house\n{FFFFFF}Owner: %s\n%s\n{AFAFAF}/enter",
+            HouseInteriors[House[h][hType]][hiName], House[h][hOwnerName], House[h][hLocked] ? "{FF6347}Locked" : "{9ACD32}Open");
+    }
+    else
+    {
+        format(text, sizeof text, "{9ACD32}House for sale\n{FFFFFF}%s - $%d\n{AFAFAF}/buyhouse  /enter to look inside",
+            HouseInteriors[House[h][hType]][hiName], House[h][hPrice]);
+    }
+    if (!House[h][hHasLabel])
+    {
+        House[h][hLabel] = Create3DTextLabel(text, COLOR_WHITE, House[h][hX], House[h][hY], House[h][hZ] + 0.7, 15.0, 0, true);
+        House[h][hHasLabel] = true;
+    }
+    else
+    {
+        Update3DTextLabelText(House[h][hLabel], COLOR_WHITE, text);
+    }
+}
+
+stock LoadHouses()
+{
+    new DBResult:result = DB_ExecuteQuery(gDB,
+        "SELECT h.id, h.owner, h.price, h.type, h.x, h.y, h.z, h.locked, IFNULL(a.name, '') AS name \
+         FROM houses h LEFT JOIN accounts a ON a.id = h.owner ORDER BY h.id LIMIT %d", MAX_HOUSES);
+    new count;
+    if (result && DB_GetRowCount(result))
+    {
+        do
+        {
+            new h = count++;
+            House[h][hDBID] = DB_GetFieldIntByName(result, "id");
+            House[h][hOwner] = DB_GetFieldIntByName(result, "owner");
+            House[h][hPrice] = DB_GetFieldIntByName(result, "price");
+            House[h][hType] = clamp(DB_GetFieldIntByName(result, "type"), 0, sizeof HouseInteriors - 1);
+            House[h][hX] = DB_GetFieldFloatByName(result, "x");
+            House[h][hY] = DB_GetFieldFloatByName(result, "y");
+            House[h][hZ] = DB_GetFieldFloatByName(result, "z");
+            House[h][hLocked] = DB_GetFieldIntByName(result, "locked") != 0;
+            DB_GetFieldStringByName(result, "name", House[h][hOwnerName], MAX_PLAYER_NAME + 1);
+            if (House[h][hOwnerName][0] == EOS) House[h][hOwner] = 0;
+            RefreshHouse(h);
+        }
+        while (DB_SelectNextRow(result) && count < MAX_HOUSES);
+    }
+    DB_FreeResultSet(result);
+    printf("[Grand RP] %d houses loaded.", count);
+}
+
+stock SaveHouse(h)
+{
+    DB_FreeResultSet(DB_ExecuteQuery(gDB, "UPDATE houses SET owner=%d, price=%d, type=%d, locked=%d WHERE id=%d",
+        House[h][hOwner], House[h][hPrice], House[h][hType], House[h][hLocked], House[h][hDBID]));
+}
+
+// House whose door the player is standing at, or -1
+stock HouseAtDoor(playerid)
+{
+    if (GetPlayerVirtualWorld(playerid) != 0) return -1;
+    for (new h = 0; h < MAX_HOUSES; h++)
+    {
+        if (House[h][hDBID] && IsPlayerInRangeOfPoint(playerid, 2.5, House[h][hX], House[h][hY], House[h][hZ])) return h;
+    }
+    return -1;
+}
+
+// House the player is inside, or -1
+stock HouseInside(playerid)
+{
+    new h = GetPlayerVirtualWorld(playerid) - HOUSE_VW_BASE;
+    if (h < 0 || h >= MAX_HOUSES || !House[h][hDBID]) return -1;
+    return h;
+}
+
+stock bool:OwnsAHouse(playerid)
+{
+    for (new h = 0; h < MAX_HOUSES; h++)
+    {
+        if (House[h][hDBID] && House[h][hOwner] == Player[playerid][pID]) return true;
+    }
+    return false;
+}
+
+// ---------------------------------------------------------------------------
+// Gang turfs
+// ---------------------------------------------------------------------------
+
+stock TurfColour(t)
+{
+    return (FactionColours[TurfOwner[t]] & 0xFFFFFF00) | 0x80;
+}
+
+stock LoadTurfs()
+{
+    for (new t = 0; t < sizeof Turfs; t++)
+    {
+        TurfOwner[t] = Turfs[t][tDefaultOwner];
+        new DBResult:result = DB_ExecuteQuery(gDB, "SELECT owner FROM turfs WHERE id=%d", t);
+        if (result && DB_GetRowCount(result))
+        {
+            new owner = DB_GetFieldInt(result, 0);
+            if (IsGang(owner)) TurfOwner[t] = owner;
+        }
+        DB_FreeResultSet(result);
+        TurfZone[t] = GangZoneCreate(Turfs[t][tMinX], Turfs[t][tMinY], Turfs[t][tMaxX], Turfs[t][tMaxY]);
+    }
+}
+
+stock ShowTurfs(playerid)
+{
+    for (new t = 0; t < sizeof Turfs; t++) GangZoneShowForPlayer(playerid, TurfZone[t], TurfColour(t));
+}
+
+stock bool:IsPlayerInTurf(playerid, t)
+{
+    if (GetPlayerVirtualWorld(playerid) != 0 || GetPlayerInterior(playerid) != 0) return false;
+    new Float:x, Float:y, Float:z;
+    GetPlayerPos(playerid, x, y, z);
+    return x >= Turfs[t][tMinX] && x <= Turfs[t][tMaxX] && y >= Turfs[t][tMinY] && y <= Turfs[t][tMaxY];
+}
+
+stock TurfAt(playerid)
+{
+    for (new t = 0; t < sizeof Turfs; t++)
+    {
+        if (IsPlayerInTurf(playerid, t)) return t;
+    }
+    return -1;
+}
+
+stock EndTurfWar(t)
+{
+    GangZoneStopFlashForAll(TurfZone[t]);
+    GangZoneShowForAll(TurfZone[t], TurfColour(t));
+    TurfAttacker[t] = FACTION_NONE;
+    TurfCooldown[t] = gettime() + TURF_COOLDOWN;
+}
+
+forward TurfTick();
+public TurfTick()
+{
+    for (new t = 0; t < sizeof Turfs; t++)
+    {
+        new attacker = TurfAttacker[t];
+        if (attacker == FACTION_NONE) continue;
+
+        new attackers, defenders;
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (!IsPlayerConnected(i) || !Player[i][pLoggedIn] || GetPlayerState(i) == PLAYER_STATE_WASTED) continue;
+            if (!IsPlayerInTurf(i, t)) continue;
+            if (Player[i][pFaction] == attacker) attackers++;
+            else if (Player[i][pFaction] == TurfOwner[t]) defenders++;
+        }
+
+        new msg[144];
+        if (!attackers)
+        {
+            format(msg, sizeof msg, "The %s attack on %s failed.", FactionNames[attacker], Turfs[t][tName]);
+            SendFactionMessage(attacker, COLOR_ERROR, msg);
+            SendFactionMessage(TurfOwner[t], COLOR_SUCCESS, msg);
+            EndTurfWar(t);
+            continue;
+        }
+        // Defenders on the turf hold the clock
+        if (defenders) continue;
+        if (--TurfTimeLeft[t] > 0) continue;
+
+        new loser = TurfOwner[t];
+        TurfOwner[t] = attacker;
+        DB_FreeResultSet(DB_ExecuteQuery(gDB, "INSERT OR REPLACE INTO turfs (id, owner) VALUES (%d, %d)", t, attacker));
+        for (new i = 0; i < MAX_PLAYERS; i++)
+        {
+            if (IsPlayerConnected(i) && Player[i][pLoggedIn] && Player[i][pFaction] == attacker && IsPlayerInTurf(i, t))
+            {
+                GiveMoney(i, TURF_REWARD);
+                GiveExp(i, 1);
+            }
+        }
+        format(msg, sizeof msg, "%s took %s from %s!", FactionNames[attacker], Turfs[t][tName], FactionNames[loser]);
+        SendClientMessageToAll(FactionColours[attacker], msg);
+        EndTurfWar(t);
+    }
+    return 1;
+}
+
+// ---------------------------------------------------------------------------
+// Phone
+// ---------------------------------------------------------------------------
+
+stock EndCall(playerid, const reason[])
+{
+    new partner = Player[playerid][pCallPartner] - 1;
+    Player[playerid][pCallPartner] = 0;
+    Player[playerid][pCallActive] = false;
+    Player[playerid][pCallRinging] = false;
+    if (partner >= 0 && IsPlayerConnected(partner) && Player[partner][pCallPartner] - 1 == playerid)
+    {
+        Player[partner][pCallPartner] = 0;
+        Player[partner][pCallActive] = false;
+        Player[partner][pCallRinging] = false;
+        SendClientMessage(partner, COLOR_GREY, reason);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Account flow
 // ---------------------------------------------------------------------------
 
@@ -510,6 +847,7 @@ stock OnPlayerLoggedIn(playerid)
     SendClientMessage(playerid, COLOR_SUCCESS, msg);
 
     LoadPlayerVehicles(playerid);
+    ShowTurfs(playerid);
     SetPlayerScore(playerid, Player[playerid][pLevel]);
     ResetPlayerMoney(playerid);
     GivePlayerMoney(playerid, Player[playerid][pMoney]);
@@ -541,7 +879,7 @@ main()
 
 public OnGameModeInit()
 {
-    SetGameModeText("Grand RP v0.1");
+    SetGameModeText("Grand RP v0.2");
     InitDatabase();
 
     UsePlayerPedAnims();
@@ -561,12 +899,24 @@ public OnGameModeInit()
     Create3DTextLabel("{33CCFF}Car Dealership\n{FFFFFF}/buycar", COLOR_WHITE, DEALER_X, DEALER_Y, DEALER_Z + 0.5, 15.0, 0);
     CreatePickup(1239, 1, TRUCK_DEPOT_X, TRUCK_DEPOT_Y, TRUCK_DEPOT_Z);
     Create3DTextLabel("{33CCFF}Truck Depot\n{FFFFFF}/deliver", COLOR_WHITE, TRUCK_DEPOT_X, TRUCK_DEPOT_Y, TRUCK_DEPOT_Z + 0.5, 15.0, 0);
+    CreatePickup(1239, 1, GARAGE_X, GARAGE_Y, GARAGE_Z);
+    Create3DTextLabel("{33CCFF}Idlewood Garage\n{FFFFFF}Mechanics: tow trucks here, /repair", COLOR_WHITE, GARAGE_X, GARAGE_Y, GARAGE_Z + 0.5, 15.0, 0);
+    CreatePickup(1582, 1, PIZZA_X, PIZZA_Y, PIZZA_Z);
+    Create3DTextLabel("{33CCFF}Well Stacked Pizza\n{FFFFFF}/pizza on a pizza bike", COLOR_WHITE, PIZZA_X, PIZZA_Y, PIZZA_Z + 0.5, 15.0, 0);
+
+    LoadHouses();
+    LoadTurfs();
 
     // Job vehicles
     for (new i = 0; i < 4; i++)
     {
         CreateVehicle(499, TRUCK_DEPOT_X + 6.0 + (i * 4.0), TRUCK_DEPOT_Y + 8.0, TRUCK_DEPOT_Z, 0.0, 1, 1, 300);
         CreateVehicle(420, 1777.0 + (i * 4.0), -1890.0, 13.4, 270.0, 6, 1, 300);
+        CreateVehicle(448, PIZZA_X + 4.0 + (i * 2.0), PIZZA_Y - 6.0, PIZZA_Z, 90.0, 3, 6, 300);
+    }
+    for (new i = 0; i < 2; i++)
+    {
+        CreateVehicle(525, GARAGE_X + 6.0 + (i * 5.0), GARAGE_Y + 6.0, GARAGE_Z, 0.0, 1, 1, 300);
     }
 
     // Faction vehicles
@@ -578,6 +928,7 @@ public OnGameModeInit()
 
     SetTimer("PayDay", PAYDAY_INTERVAL, true);
     SetTimer("AutoSave", 5 * 60 * 1000, true);
+    SetTimer("TurfTick", 1000, true);
     return 1;
 }
 
@@ -640,6 +991,7 @@ public OnPlayerDisconnect(playerid, reason)
     {
         SavePlayer(playerid);
         UnloadPlayerVehicles(playerid);
+        EndCall(playerid, "The line went dead.");
 
         new msg[144];
         static const reasons[][] = {"Timeout", "Quit", "Kicked"};
@@ -680,7 +1032,7 @@ public OnPlayerSpawn(playerid)
     SetPlayerInterior(playerid, Player[playerid][pInterior]);
     SetPlayerVirtualWorld(playerid, Player[playerid][pVW]);
     SetPlayerSkin(playerid, Player[playerid][pOnDuty] ? FactionSkins[Player[playerid][pFaction]] : Player[playerid][pSkin]);
-    SetPlayerColor(playerid, Player[playerid][pOnDuty] && Player[playerid][pFaction] == FACTION_LSPD ? 0x0000FFFF : 0xFFFFFF00);
+    SetPlayerColor(playerid, Player[playerid][pOnDuty] ? FactionColours[Player[playerid][pFaction]] : 0xFFFFFF00);
     ResetPlayerMoney(playerid);
     GivePlayerMoney(playerid, Player[playerid][pMoney]);
 
@@ -776,6 +1128,15 @@ public OnPlayerText(playerid, text[])
     if (!Player[playerid][pLoggedIn]) return 0;
 
     new msg[144];
+    if (Player[playerid][pCallActive])
+    {
+        new partner = Player[playerid][pCallPartner] - 1;
+        format(msg, sizeof msg, "(Phone) %s: %s", RPName(playerid), text);
+        SendClientMessage(partner, 0xFFFF00FF, msg);
+        format(msg, sizeof msg, "%s says (phone): %s", RPName(playerid), text);
+        SendNearbyMessage(playerid, CHAT_RANGE, COLOR_WHITE, msg);
+        return 0;
+    }
     if (IsPlayerInAnyVehicle(playerid))
     {
         format(msg, sizeof msg, "%s says (vehicle): %s", RPName(playerid), text);
@@ -815,6 +1176,18 @@ public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstat
         RemovePlayerFromVehicle(playerid);
         return 1;
     }
+    if (model == 525 && Player[playerid][pJob] != JOB_MECHANIC)
+    {
+        SendError(playerid, "Only mechanics can drive tow trucks. Visit the job center.");
+        RemovePlayerFromVehicle(playerid);
+        return 1;
+    }
+    if (model == 448 && Player[playerid][pJob] != JOB_PIZZA)
+    {
+        SendError(playerid, "Only pizza delivery workers can ride this bike. Visit the job center.");
+        RemovePlayerFromVehicle(playerid);
+        return 1;
+    }
     if (model == 596 && Player[playerid][pFaction] != FACTION_LSPD)
     {
         SendError(playerid, "This vehicle belongs to the LSPD.");
@@ -833,6 +1206,26 @@ public OnPlayerStateChange(playerid, PLAYER_STATE:newstate, PLAYER_STATE:oldstat
 
 public OnPlayerEnterCheckpoint(playerid)
 {
+    if (Player[playerid][pDeliveryStage] == 2)
+    {
+        new bike = GetPlayerVehicleID(playerid);
+        if (!bike || GetVehicleModel(bike) != 448)
+        {
+            SendError(playerid, "Bring the pizza on your delivery bike.");
+            return 1;
+        }
+        new stop = Player[playerid][pDeliveryRoute], tip = PizzaRoutes[stop][rtPay] + (Player[playerid][pLevel] * 20) + random(150);
+        GiveMoney(playerid, tip);
+        GiveExp(playerid, 1);
+        DisablePlayerCheckpoint(playerid);
+        Player[playerid][pDeliveryStage] = 0;
+
+        new text[128];
+        format(text, sizeof text, "Pizza delivered to %s. You earned $%d. Head back for another with /pizza.", PizzaRoutes[stop][rtName], tip);
+        SendClientMessage(playerid, COLOR_SUCCESS, text);
+        GameTextForPlayer(playerid, "~g~Delivered!", 3000, 1);
+        return 1;
+    }
     if (Player[playerid][pDeliveryStage] != 1) return 1;
 
     new vehicleid = GetPlayerVehicleID(playerid);
@@ -899,7 +1292,7 @@ public PayDay()
         if (!IsPlayerConnected(i) || !Player[i][pLoggedIn]) continue;
 
         new salary = 500 + (Player[i][pLevel] * 100), interest = Player[i][pBank] / 1000;
-        if (Player[i][pFaction] != FACTION_NONE) salary += Player[i][pRank] * 400;
+        if (Player[i][pFaction] != FACTION_NONE && !IsGang(Player[i][pFaction])) salary += Player[i][pRank] * 400;
         if (interest > 2000) interest = 2000;
 
         Player[i][pBank] += salary + interest;
@@ -971,10 +1364,13 @@ stock ShowHelp(playerid)
         "{33CCFF}General:{FFFFFF} /stats /pay /engine /lock /park /mycars\n\
 {33CCFF}Chat:{FFFFFF} /me /do /b (OOC) /s (shout) /w (whisper)\n\
 {33CCFF}Bank:{FFFFFF} /balance /deposit /withdraw /transfer\n\
-{33CCFF}Jobs:{FFFFFF} /jobs /takejob /quitjob /deliver /fare\n\
+{33CCFF}Jobs:{FFFFFF} /jobs /takejob /quitjob /deliver /fare /repair /pizza\n\
 {33CCFF}Factions:{FFFFFF} /f /duty /invite /uninvite /setrank /cuff /uncuff\n\
+{33CCFF}Gangs:{FFFFFF} /f /turfs /capture\n\
+{33CCFF}Houses:{FFFFFF} /buyhouse /sellhouse /enter /exit /lockhouse\n\
+{33CCFF}Phone:{FFFFFF} /number /call /pickup /hangup /sms\n\
 {33CCFF}Dealership:{FFFFFF} /buycar\n\n\
-{AFAFAF}Bank, job center and dealership are marked with pickups around Los Santos.",
+{AFAFAF}Bank, job center, dealership, garage and pizzeria are marked with pickups around Los Santos.",
         "Close", "");
 }
 
@@ -1009,6 +1405,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof msg, "Job: %s | Faction: %s | Rank: %s",
             JobNames[Player[playerid][pJob]], FactionNames[Player[playerid][pFaction]],
             Player[playerid][pFaction] ? FactionRanks[Player[playerid][pFaction]][Player[playerid][pRank]] : "-");
+        SendClientMessage(playerid, COLOR_INFO, msg);
+        format(msg, sizeof msg, "Phone: %d | House: %s", PhoneNumber(playerid), OwnsAHouse(playerid) ? "yes" : "no");
         SendClientMessage(playerid, COLOR_INFO, msg);
         return 1;
     }
@@ -1133,6 +1531,8 @@ public OnPlayerCommandText(playerid, cmdtext[])
         SendClientMessage(playerid, COLOR_INFO, "Available jobs (use /takejob [id] at the job center):");
         SendClientMessage(playerid, COLOR_WHITE, "1 - Trucker: deliver cargo across San Andreas (/deliver at the Ocean Docks depot)");
         SendClientMessage(playerid, COLOR_WHITE, "2 - Taxi driver: drive players around and charge fares (/fare)");
+        SendClientMessage(playerid, COLOR_WHITE, "3 - Mechanic: tow trucks at the Idlewood garage, fix cars for money (/repair)");
+        SendClientMessage(playerid, COLOR_WHITE, "4 - Pizza delivery: bikes at Well Stacked Pizza in Idlewood (/pizza)");
         return 1;
     }
     if (!strcmp(cmd, "/takejob", true))
@@ -1140,7 +1540,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (!IsPlayerInRangeOfPoint(playerid, 4.0, JOBS_X, JOBS_Y, JOBS_Z))
             return SendError(playerid, "You need to be at the job center (Market).");
         new job = strval(strtok(cmdtext, idx));
-        if (job != JOB_TRUCKER && job != JOB_TAXI) return SendUsage(playerid, "/takejob [1-2] (see /jobs)");
+        if (job <= JOB_NONE || job >= MAX_JOBS) return SendUsage(playerid, "/takejob [1-4] (see /jobs)");
         if (Player[playerid][pJob] != JOB_NONE) return SendError(playerid, "Quit your current job first with /quitjob.");
         Player[playerid][pJob] = job;
         format(msg, sizeof msg, "You are now a %s.", JobNames[job]);
@@ -1191,6 +1591,226 @@ public OnPlayerCommandText(playerid, cmdtext[])
         GiveExp(playerid, 1);
         format(msg, sizeof msg, "* %s pays the $%d taxi fare.", RPName(targetid), amount);
         SendNearbyMessage(playerid, CHAT_RANGE, COLOR_PURPLE, msg);
+        return 1;
+    }
+
+    if (!strcmp(cmd, "/repair", true))
+    {
+        if (Player[playerid][pJob] != JOB_MECHANIC) return SendError(playerid, "You are not a mechanic.");
+        new targetid = FindPlayer(strtok(cmdtext, idx)), price = strval(strtok(cmdtext, idx));
+        if (targetid == INVALID_PLAYER_ID || price < 0 || price > 2000)
+            return SendUsage(playerid, "/repair [driver] [price, max $2000]");
+        new vehicleid = GetPlayerVehicleID(targetid);
+        if (!vehicleid) return SendError(playerid, "That player is not in a vehicle.");
+        new Float:x, Float:y, Float:z;
+        GetVehiclePos(vehicleid, x, y, z);
+        if (!IsPlayerInRangeOfPoint(playerid, 6.0, x, y, z)) return SendError(playerid, "You need to be next to their vehicle.");
+        if (targetid != playerid)
+        {
+            if (Player[targetid][pMoney] < price) return SendError(playerid, "They can't afford that.");
+            GiveMoney(targetid, -price);
+            GiveMoney(playerid, price);
+            GiveExp(playerid, 1);
+        }
+        RepairVehicle(vehicleid);
+        format(msg, sizeof msg, "* %s repairs %s's vehicle for $%d.", RPName(playerid), RPName(targetid), price);
+        SendNearbyMessage(playerid, CHAT_RANGE, COLOR_PURPLE, msg);
+        return 1;
+    }
+    if (!strcmp(cmd, "/pizza", true))
+    {
+        if (Player[playerid][pJob] != JOB_PIZZA) return SendError(playerid, "You don't work for Well Stacked Pizza.");
+        if (Player[playerid][pDeliveryStage]) return SendError(playerid, "You already have a delivery in progress.");
+        new vehicleid = GetPlayerVehicleID(playerid);
+        if (!vehicleid || GetVehicleModel(vehicleid) != 448) return SendError(playerid, "You need to be on a pizza bike.");
+        if (!IsPlayerInRangeOfPoint(playerid, 25.0, PIZZA_X, PIZZA_Y, PIZZA_Z))
+            return SendError(playerid, "Pick up the pizza at Well Stacked Pizza in Idlewood.");
+
+        new stop = random(sizeof PizzaRoutes);
+        Player[playerid][pDeliveryRoute] = stop;
+        Player[playerid][pDeliveryStage] = 2;
+        SetPlayerCheckpoint(playerid, PizzaRoutes[stop][rtX], PizzaRoutes[stop][rtY], PizzaRoutes[stop][rtZ], 4.0);
+        format(msg, sizeof msg, "Hot pizza for %s! Deliver it before it gets cold (marked on your radar).", PizzaRoutes[stop][rtName]);
+        SendClientMessage(playerid, COLOR_INFO, msg);
+        return 1;
+    }
+
+    // ---- Houses -----------------------------------------------------------
+    if (!strcmp(cmd, "/buyhouse", true))
+    {
+        new h = HouseAtDoor(playerid);
+        if (h == -1) return SendError(playerid, "You are not at a house door.");
+        if (House[h][hOwner]) return SendError(playerid, "This house is not for sale.");
+        if (OwnsAHouse(playerid)) return SendError(playerid, "You already own a house. Sell it first with /sellhouse.");
+        if (Player[playerid][pMoney] < House[h][hPrice]) return SendError(playerid, "You can't afford this house.");
+
+        GiveMoney(playerid, -House[h][hPrice]);
+        House[h][hOwner] = Player[playerid][pID];
+        format(House[h][hOwnerName], MAX_PLAYER_NAME + 1, "%s", PlayerName(playerid));
+        House[h][hLocked] = true;
+        SaveHouse(h);
+        RefreshHouse(h);
+        SavePlayer(playerid);
+        format(msg, sizeof msg, "You bought this house for $%d! Use /enter, /exit and /lockhouse.", House[h][hPrice]);
+        SendClientMessage(playerid, COLOR_SUCCESS, msg);
+        return 1;
+    }
+    if (!strcmp(cmd, "/sellhouse", true))
+    {
+        new h = HouseAtDoor(playerid);
+        if (h == -1) h = HouseInside(playerid);
+        if (h == -1 || House[h][hOwner] != Player[playerid][pID]) return SendError(playerid, "You need to be at your own house.");
+
+        new refund = House[h][hPrice] / 2;
+        GiveMoney(playerid, refund);
+        House[h][hOwner] = 0;
+        House[h][hOwnerName][0] = EOS;
+        House[h][hLocked] = true;
+        SaveHouse(h);
+        RefreshHouse(h);
+        SavePlayer(playerid);
+        format(msg, sizeof msg, "You sold your house back to the city for $%d.", refund);
+        SendClientMessage(playerid, COLOR_SUCCESS, msg);
+        return 1;
+    }
+    if (!strcmp(cmd, "/enter", true))
+    {
+        new h = HouseAtDoor(playerid);
+        if (h == -1) return SendError(playerid, "You are not at a house door.");
+        if (IsPlayerInAnyVehicle(playerid)) return SendError(playerid, "Get out of your vehicle first.");
+        // Houses for sale can be viewed; owned ones only when open or by the owner
+        if (House[h][hOwner] && House[h][hLocked] && House[h][hOwner] != Player[playerid][pID])
+        {
+            GameTextForPlayer(playerid, "~r~Locked", 2000, 3);
+            return 1;
+        }
+        new type = House[h][hType];
+        SetPlayerInterior(playerid, HouseInteriors[type][hiInterior]);
+        SetPlayerVirtualWorld(playerid, HOUSE_VW_BASE + h);
+        SetPlayerPos(playerid, HouseInteriors[type][hiX], HouseInteriors[type][hiY], HouseInteriors[type][hiZ]);
+        SetCameraBehindPlayer(playerid);
+        return 1;
+    }
+    if (!strcmp(cmd, "/exit", true))
+    {
+        new h = HouseInside(playerid);
+        if (h == -1) return SendError(playerid, "You are not inside a house.");
+        new type = House[h][hType];
+        if (!IsPlayerInRangeOfPoint(playerid, 3.0, HouseInteriors[type][hiX], HouseInteriors[type][hiY], HouseInteriors[type][hiZ]))
+            return SendError(playerid, "Go to the front door to leave.");
+        SetPlayerInterior(playerid, 0);
+        SetPlayerVirtualWorld(playerid, 0);
+        SetPlayerPos(playerid, House[h][hX], House[h][hY], House[h][hZ]);
+        SetCameraBehindPlayer(playerid);
+        return 1;
+    }
+    if (!strcmp(cmd, "/lockhouse", true))
+    {
+        new h = HouseAtDoor(playerid);
+        if (h == -1) h = HouseInside(playerid);
+        if (h == -1 || House[h][hOwner] != Player[playerid][pID]) return SendError(playerid, "You need to be at your own house.");
+        House[h][hLocked] = !House[h][hLocked];
+        SaveHouse(h);
+        RefreshHouse(h);
+        GameTextForPlayer(playerid, House[h][hLocked] ? "~r~House locked" : "~g~House unlocked", 2000, 3);
+        PlayerPlaySound(playerid, 1145, 0.0, 0.0, 0.0);
+        return 1;
+    }
+
+    // ---- Phone ------------------------------------------------------------
+    if (!strcmp(cmd, "/number", true))
+    {
+        new tmp[64];
+        tmp = strtok(cmdtext, idx);
+        new targetid = tmp[0] == EOS ? playerid : FindPlayer(tmp);
+        if (targetid == INVALID_PLAYER_ID || !Player[targetid][pLoggedIn]) return SendUsage(playerid, "/number [player]");
+        format(msg, sizeof msg, "Phone book: %s - %d", RPName(targetid), PhoneNumber(targetid));
+        SendClientMessage(playerid, COLOR_INFO, msg);
+        return 1;
+    }
+    if (!strcmp(cmd, "/sms", true))
+    {
+        new number = strval(strtok(cmdtext, idx)), text[128];
+        text = strrest(cmdtext, idx);
+        if (number <= 0 || text[0] == EOS) return SendUsage(playerid, "/sms [number] [message]");
+        new targetid = FindPhone(number);
+        if (targetid == INVALID_PLAYER_ID) return SendError(playerid, "That number is not reachable right now.");
+        format(msg, sizeof msg, "SMS from %d (%s): %s", PhoneNumber(playerid), RPName(playerid), text);
+        SendClientMessage(targetid, 0xFFFF00FF, msg);
+        PlayerPlaySound(targetid, 1052, 0.0, 0.0, 0.0);
+        format(msg, sizeof msg, "SMS to %d: %s", number, text);
+        SendClientMessage(playerid, 0xFFFF00FF, msg);
+        return 1;
+    }
+    if (!strcmp(cmd, "/call", true))
+    {
+        new number = strval(strtok(cmdtext, idx));
+        if (number <= 0) return SendUsage(playerid, "/call [number]");
+        if (Player[playerid][pCallPartner]) return SendError(playerid, "You are already on a call. /hangup first.");
+        new targetid = FindPhone(number);
+        if (targetid == INVALID_PLAYER_ID || targetid == playerid) return SendError(playerid, "The number you dialed is not reachable.");
+        if (Player[targetid][pCallPartner]) return SendError(playerid, "The line is busy.");
+
+        Player[playerid][pCallPartner] = targetid + 1;
+        Player[targetid][pCallPartner] = playerid + 1;
+        Player[targetid][pCallRinging] = true;
+        format(msg, sizeof msg, "Your phone is ringing: %d (%s). /pickup to answer, /hangup to reject.",
+            PhoneNumber(playerid), RPName(playerid));
+        SendClientMessage(targetid, 0xFFFF00FF, msg);
+        PlayerPlaySound(targetid, 1052, 0.0, 0.0, 0.0);
+        format(msg, sizeof msg, "* %s takes out a phone and dials a number.", RPName(playerid));
+        SendNearbyMessage(playerid, CHAT_RANGE, COLOR_PURPLE, msg);
+        SendClientMessage(playerid, COLOR_GREY, "Ringing... (/hangup to cancel)");
+        return 1;
+    }
+    if (!strcmp(cmd, "/pickup", true))
+    {
+        new caller = Player[playerid][pCallPartner] - 1;
+        if (caller < 0 || !Player[playerid][pCallRinging]) return SendError(playerid, "Nobody is calling you.");
+        Player[playerid][pCallRinging] = false;
+        Player[playerid][pCallActive] = true;
+        Player[caller][pCallActive] = true;
+        SendClientMessage(playerid, COLOR_SUCCESS, "You answered. Talk in normal chat, /hangup to end the call.");
+        SendClientMessage(caller, COLOR_SUCCESS, "They picked up. Talk in normal chat, /hangup to end the call.");
+        return 1;
+    }
+    if (!strcmp(cmd, "/hangup", true))
+    {
+        if (!Player[playerid][pCallPartner]) return SendError(playerid, "You are not on a call.");
+        EndCall(playerid, "They hung up.");
+        SendClientMessage(playerid, COLOR_GREY, "You hung up.");
+        return 1;
+    }
+
+    // ---- Gangs ------------------------------------------------------------
+    if (!strcmp(cmd, "/turfs", true))
+    {
+        for (new t = 0; t < sizeof Turfs; t++)
+        {
+            format(msg, sizeof msg, "%s - %s%s", Turfs[t][tName], FactionNames[TurfOwner[t]],
+                TurfAttacker[t] ? " (under attack!)" : "");
+            SendClientMessage(playerid, FactionColours[TurfOwner[t]], msg);
+        }
+        return 1;
+    }
+    if (!strcmp(cmd, "/capture", true))
+    {
+        new gang = Player[playerid][pFaction];
+        if (!IsGang(gang)) return SendError(playerid, "Only gang members can capture turfs.");
+        new t = TurfAt(playerid);
+        if (t == -1) return SendError(playerid, "You are not on a gang turf (see the coloured zones on your map).");
+        if (TurfOwner[t] == gang) return SendError(playerid, "Your gang already owns this turf.");
+        if (TurfAttacker[t]) return SendError(playerid, "This turf is already under attack.");
+        if (gettime() < TurfCooldown[t]) return SendError(playerid, "This turf was fought over recently, try again later.");
+
+        TurfAttacker[t] = gang;
+        TurfTimeLeft[t] = TURF_CAPTURE_TIME;
+        GangZoneFlashForAll(TurfZone[t], (FactionColours[gang] & 0xFFFFFF00) | 0x80);
+        format(msg, sizeof msg, "%s started a turf war for %s! Hold the turf for %d seconds.",
+            FactionNames[gang], Turfs[t][tName], TURF_CAPTURE_TIME);
+        SendFactionMessage(gang, FactionColours[gang], msg);
+        format(msg, sizeof msg, "%s are attacking your turf %s! Get there to defend it.", FactionNames[gang], Turfs[t][tName]);
+        SendFactionMessage(TurfOwner[t], COLOR_ERROR, msg);
         return 1;
     }
 
@@ -1295,6 +1915,12 @@ public OnPlayerCommandText(playerid, cmdtext[])
                 GivePlayerWeapon(playerid, WEAPON_NITESTICK, 1);
                 GivePlayerWeapon(playerid, WEAPON_SILENCED, 200);
                 GivePlayerWeapon(playerid, WEAPON_SHOTGUN, 50);
+            }
+            else if (IsGang(faction))
+            {
+                SetPlayerColor(playerid, FactionColours[faction]);
+                GivePlayerWeapon(playerid, WEAPON_BAT, 1);
+                GivePlayerWeapon(playerid, WEAPON_COLT45, 60);
             }
             format(msg, sizeof msg, "* %s %s is now on duty.", FactionRanks[faction][Player[playerid][pRank]], RPName(playerid));
         }
@@ -1404,7 +2030,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         if (!CheckAdmin(playerid, 3)) return 1;
         new targetid = FindPlayer(strtok(cmdtext, idx)), faction = strval(strtok(cmdtext, idx));
         if (targetid == INVALID_PLAYER_ID || faction < 0 || faction >= MAX_FACTIONS)
-            return SendUsage(playerid, "/makeleader [player] [0=none 1=LSPD 2=Medics]");
+            return SendUsage(playerid, "/makeleader [player] [0=none 1=LSPD 2=Medics 3=Grove 4=Ballas]");
         Player[targetid][pFaction] = faction;
         Player[targetid][pRank] = faction ? MAX_RANK : 0;
         format(msg, sizeof msg, "%s made %s leader of %s.", PlayerName(playerid), PlayerName(targetid), FactionNames[faction]);
@@ -1481,6 +2107,54 @@ public OnPlayerCommandText(playerid, cmdtext[])
         format(msg, sizeof msg, "%s set %s's cash to $%d.", PlayerName(playerid), PlayerName(targetid), amount);
         SendAdminMessage(COLOR_ADMIN, msg);
         SavePlayer(targetid);
+        return 1;
+    }
+    if (!strcmp(cmd, "/createhouse", true))
+    {
+        if (!CheckAdmin(playerid, 4)) return 1;
+        new price = strval(strtok(cmdtext, idx)), type = strval(strtok(cmdtext, idx)) - 1;
+        if (price <= 0 || type < 0 || type >= sizeof HouseInteriors)
+            return SendUsage(playerid, "/createhouse [price] [1=small 2=medium 3=large 4=villa 5=mansion] (stand at the door)");
+        if (GetPlayerVirtualWorld(playerid) != 0 || GetPlayerInterior(playerid) != 0) return SendError(playerid, "Houses go outside.");
+        new h = -1;
+        for (new i = 0; i < MAX_HOUSES; i++)
+        {
+            if (!House[i][hDBID]) { h = i; break; }
+        }
+        if (h == -1) return SendError(playerid, "The house limit is reached.");
+
+        new Float:x, Float:y, Float:z;
+        GetPlayerPos(playerid, x, y, z);
+        DB_FreeResultSet(DB_ExecuteQuery(gDB, "INSERT INTO houses (price, type, x, y, z) VALUES (%d, %d, %f, %f, %f)",
+            price, type, x, y, z));
+        new DBResult:result = DB_ExecuteQuery(gDB, "SELECT last_insert_rowid()");
+        House[h][hDBID] = DB_GetFieldInt(result, 0);
+        DB_FreeResultSet(result);
+        House[h][hOwner] = 0;
+        House[h][hOwnerName][0] = EOS;
+        House[h][hPrice] = price;
+        House[h][hType] = type;
+        House[h][hX] = x;
+        House[h][hY] = y;
+        House[h][hZ] = z;
+        House[h][hLocked] = true;
+        RefreshHouse(h);
+        format(msg, sizeof msg, "%s created a %s house for $%d (house #%d).", PlayerName(playerid), HouseInteriors[type][hiName], price, h);
+        SendAdminMessage(COLOR_ADMIN, msg);
+        return 1;
+    }
+    if (!strcmp(cmd, "/deletehouse", true))
+    {
+        if (!CheckAdmin(playerid, 4)) return 1;
+        new h = HouseAtDoor(playerid);
+        if (h == -1) return SendError(playerid, "Stand at the house door.");
+        DB_FreeResultSet(DB_ExecuteQuery(gDB, "DELETE FROM houses WHERE id=%d", House[h][hDBID]));
+        DestroyPickup(House[h][hPickup] - 1);
+        Delete3DTextLabel(House[h][hLabel]);
+        static const empty[E_HOUSE];
+        House[h] = empty;
+        format(msg, sizeof msg, "%s deleted house #%d.", PlayerName(playerid), h);
+        SendAdminMessage(COLOR_ADMIN, msg);
         return 1;
     }
     if (!strcmp(cmd, "/veh", true))
