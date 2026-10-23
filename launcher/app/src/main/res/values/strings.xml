@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kingmakers RP</string>
+    <string name="title">KINGMAKERS RP</string>
+    <string name="subtitle">Mobile Roleplay</string>
+    <string name="character">Your character</string>
+    <string name="name_hint">Firstname_Lastname</string>
+    <string name="name_help">Your in-game name, e.g. John_Smith</string>
+    <string name="name_error">Use Firstname_Lastname, e.g. John_Smith</string>
+    <string name="servers">Servers</string>
+    <string name="refresh">Refresh</string>
+    <string name="add_server">+ Add server</string>
+    <string name="add_server_title">Add a server</string>
+    <string name="add_server_hint">host:port, e.g. 203.0.113.5:7777</string>
+    <string name="add">Add</string>
+    <string name="cancel">Cancel</string>
+    <string name="remove_server">Remove %1$s?</string>
+    <string name="remove">Remove</string>
+    <string name="invalid_server">Enter an address like 203.0.113.5:7777</string>
+    <string name="play">PLAY</string>
+    <string name="discord">Join our Discord</string>
+    <string name="footer">Playing needs the official GTA: San Andreas from Google Play.</string>
+    <string name="checking">Checking…</string>
+    <string name="offline">Offline</string>
+    <string name="players">%1$d / %2$d players</string>
+    <string name="ping">%1$d ms</string>
+    <string name="locked">Password</string>
+    <string name="game_missing_title">GTA: San Andreas required</string>
+    <string name="game_missing">Kingmakers RP runs on the official GTA: San Andreas from Rockstar Games. Get it on Google Play, then come back and press Play.</string>
+    <string name="open_play">Open Google Play</string>
+    <string name="game_found_title">Game found</string>
+    <string name="game_found">GTA: San Andreas is installed. The mobile multiplayer client is still being finished; once it is, Play will take you straight to %1$s.\n\nPC players can join right now at %2$s.</string>
+    <string name="copy_address">Copy address</string>
+    <string name="copied">Address copied</string>
+    <string name="ok">OK</string>
+</resources>

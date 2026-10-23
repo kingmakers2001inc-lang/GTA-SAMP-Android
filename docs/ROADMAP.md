@@ -22,7 +22,7 @@ Games like Grand Mobile, One State RP and Black Russia are built the same way:
 | Server gamemode | `server/` - accounts, jobs, factions, bank, dealership, admin |
 | 64-bit (arm64-v8a, GTA SA 2.11) | Builds and links; needs the 2.11 `libGTASA.so` to verify layouts (see `docs/CLIENT.md`) |
 | APK builder (`tools/make_apk.py`) | Single APKs, split installs and exported bundles (`.apks`/`.xapk`/`.apkm`) |
-| Launcher APK | Not started |
+| Launcher APK (`launcher/`) | Name, live server list (query protocol), Discord, game check; Play starts the client once it's done |
 
 ## Milestones
 
