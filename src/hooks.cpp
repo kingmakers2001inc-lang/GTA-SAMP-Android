@@ -19,7 +19,7 @@ int CRunningScript__Process_hook(void* p)
 			l_pLocalPlayer->Teleport(CVector(0.0f, 0.0f, 3.0f), 0);
 		}
 		
-		CNetGame::Instance()->DbgConnect();	
+		CNetGame::Instance()->Connect();	
 	}
 	
 	CNetGame::Instance()->Process();

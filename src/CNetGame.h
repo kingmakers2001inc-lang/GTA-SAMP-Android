@@ -8,6 +8,8 @@
 
 #include "CPlayerPool.h"
 
+#define SAMP_SETTINGS_FILE		"/sdcard/SAMP/settings.ini"
+
 class CNetGame
 {
 /*private*/public: //TODO!!!
@@ -16,11 +18,16 @@ class CNetGame
 	CPlayerPool*			m_PlayerPool = nullptr;
 	bool					m_isInGame = false;
 	
+	char					m_szHost[64] = "127.0.0.1";
+	unsigned short			m_usPort = 7777;
+	char					m_szNickName[25] = "Android_Player";
+	
 public:
 	CNetGame();
 	~CNetGame();
 
-	void DbgConnect();
+	void LoadSettings();
+	void Connect();
 	void Process();
 	
 	/* Packets */

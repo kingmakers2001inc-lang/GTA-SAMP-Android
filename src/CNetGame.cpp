@@ -1,4 +1,7 @@
 #include <thread>
+#include <stdio.h>
+#include <string.h>
+#include <string>
 
 #include "CNetGame.h"
 #include "RPC.h"
@@ -13,6 +16,8 @@ CNetGame::CNetGame()
 	RegisterRPCs(m_rakClientInterface);	
 	
 	m_PlayerPool = new CPlayerPool();
+	
+	LoadSettings();
 }
 
 CNetGame::~CNetGame()
@@ -26,10 +31,39 @@ CNetGame::~CNetGame()
 	}
 }
 
-void CNetGame::DbgConnect()
+void CNetGame::LoadSettings()
 {
-	m_rakClientInterface->Connect("192.168.1.246", 7777, 0, 0, 0); // Balika
-	// m_rakClientInterface->Connect("192.168.0.35", 7777, 0, 0, 0); // Sasuke
+	// Optional override file, one "key=value" per line: host, port, name
+	FILE* f = fopen(SAMP_SETTINGS_FILE, "r");
+	if(!f)
+	{
+		log("No %s, using defaults", SAMP_SETTINGS_FILE);
+		return;
+	}
+	
+	char line[128];
+	while(fgets(line, sizeof(line), f))
+	{
+		line[strcspn(line, "\r\n")] = 0;
+		char* value = strchr(line, '=');
+		if(!value)
+			continue;
+		*value++ = 0;
+		
+		if(!strcmp(line, "host"))
+			strncpy(m_szHost, value, sizeof(m_szHost) - 1);
+		else if(!strcmp(line, "port"))
+			m_usPort = (unsigned short) atoi(value);
+		else if(!strcmp(line, "name") && strlen(value) >= 3)
+			strncpy(m_szNickName, value, sizeof(m_szNickName) - 1);
+	}
+	fclose(f);
+}
+
+void CNetGame::Connect()
+{
+	log("Connecting to %s:%d as %s", m_szHost, m_usPort, m_szNickName);
+	m_rakClientInterface->Connect(m_szHost, m_usPort, 0, 0, 0);
 }
 
 unsigned int GetTickCount()
@@ -140,13 +174,14 @@ bool GenerateSerial(char* input, char** output, int* output_len, int key)
 	log("GenerateSerial() -> Step 2");
 	math.SerialEncrypt(key);
 	log("GenerateSerial() -> Step 3");
-	const char* result = math.ToString(16).c_str();			// Crashy here
+	// Keep the string alive: c_str() of the temporary used to dangle and crash
+	std::string result = math.ToString(16);
 	log("GenerateSerial() -> Step 4");
 	
-	*output_len = strlen(result);
-	*output = new char[*output_len];
+	*output_len = result.length();
+	*output = new char[*output_len + 1];
 	log("GenerateSerial() -> Step 5");
-	strcpy(*output, result);
+	strcpy(*output, result.c_str());
 	log("GenerateSerial() -> Step 6, everything is ok");
 	return true;
 }
@@ -281,9 +316,9 @@ void CNetGame::Packet_ConnectionSucceeded(Packet *p)
 	BYTE byteMod = 1;
 	bsSend.Write(byteMod);
 	
-	BYTE byteNameLen = (BYTE) strlen("Android");
+	BYTE byteNameLen = (BYTE) strlen(m_szNickName);
 	bsSend.Write(byteNameLen);
-	bsSend.Write("Android", byteNameLen);
+	bsSend.Write(m_szNickName, byteNameLen);
 	
 	unsigned int uiClientChallengeResponse = uiChallenge ^ iVersion;
 	bsSend.Write(uiClientChallengeResponse);
