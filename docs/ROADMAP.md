@@ -11,21 +11,22 @@ Games like Grand Mobile, One State RP and Black Russia are built the same way:
 
 | Part | State |
 | --- | --- |
-| Client hooks (scripts, population, render) | Working |
-| RakNet connect + SA-MP auth | Working; serial crash fixed, server/name now come from `/sdcard/SAMP/settings.ini` |
-| On-foot sync (send/receive) | Basic |
-| Vehicles, chat, dialogs, textdraws, RPCs | Not implemented |
+| Client hooks (scripts, population, render, touch) | Working; touch goes through an inline hook on `AND_TouchEvent` |
+| Connection to open.mp / SA-MP 0.3.7 servers | Working: 0.3.7 cipher, connection cookie, auth keys, packet IDs, version 4057. Covered by `tests/netcode/run.sh` |
+| Chat window, `/commands`, on-screen keyboard | Implemented, protocol tested; on-device layout needs tuning |
+| Dialogs (msgbox, input, password, list, tablist) | Implemented, protocol tested; on-device layout needs tuning |
+| Spawn flow, on-foot sync | Basic / not implemented |
+| Vehicles, textdraws, checkpoints, pickups | Not implemented |
 | Server gamemode | `server/` - accounts, jobs, factions, bank, dealership, admin |
 | Launcher APK | Not started |
 
 ## Milestones
 
 ### 1. Playable multiplayer (client)
-- Implement the core RPCs: `InitGame`, `ServerJoin/Quit`, `RequestClass/Spawn`, `ClientMessage`, `SetPlayerPos`, `GivePlayerMoney`, `SetPlayerSkin`.
-- Remote players: create/destroy peds on stream in/out, interpolate on-foot sync.
+- Spawn flow: `RequestClass`/`RequestSpawn`/`Spawn`, `TogglePlayerSpectating`, `SetSpawnInfo` - needed right after the login dialog.
+- Core RPCs: `SetPlayerPos`, `GivePlayerMoney`/`ResetPlayerMoney`, `SetPlayerSkin`, `SetPlayerHealth`, `GameText`.
+- Remote players: create/destroy peds on stream in/out, interpolate 0.3.7 on-foot sync.
 - Vehicles: `WorldVehicleAdd/Remove`, driver and passenger sync.
-- Chat window and touch keyboard input (`/commands` included).
-- `ShowDialog` with msgbox, input, password and list styles - the gamemode's login depends on it.
 - Checkpoints and pickups (used by jobs and the dealership).
 
 ### 2. Custom mobile UI (what makes it feel like Grand Mobile)

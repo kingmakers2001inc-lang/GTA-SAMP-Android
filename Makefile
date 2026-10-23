@@ -15,7 +15,11 @@ LIBS = log GTASA
 
 SRCDIR = src
 SRCFILES = main.cpp utils.cpp hooks.cpp RPC.cpp CNetGame.cpp CPlayerPool.cpp CPlayer.cpp
-SRCFILES += CLocalPlayer.cpp
+SRCFILES += CLocalPlayer.cpp CGUI.cpp CChat.cpp CDialog.cpp CKeyboard.cpp
+
+HOOKDIR = inlinehook
+INCDIRS += $(HOOKDIR)
+HOOKFILES = inlineHook.c relocate.c
 
 RNDIR = raknet
 INCDIRS += $(RNDIR)
@@ -53,7 +57,7 @@ CFLAGS += -frtti -fexceptions
 
 INCDIRS += ttmath
 
-default: init $(SRCFILES:%.cpp=$(OBJDIR)/$(SRCDIR)/%.o) $(RNFILES:%.cpp=$(OBJDIR)/$(RNDIR)/%.o) $(TARGET)
+default: init $(SRCFILES:%.cpp=$(OBJDIR)/$(SRCDIR)/%.o) $(RNFILES:%.cpp=$(OBJDIR)/$(RNDIR)/%.o) $(HOOKFILES:%.c=$(OBJDIR)/$(HOOKDIR)/%.o) $(TARGET)
 	@echo --------------------------------------
 	@echo Build Done
 	@echo --------------------------------------
@@ -63,6 +67,7 @@ init:
 	@if not exist $(OBJDIR)\$(SRCDIR) mkdir $(OBJDIR)\$(SRCDIR)
 	@if not exist $(OBJDIR)\$(RNDIR) mkdir $(OBJDIR)\$(RNDIR)
 	@if not exist $(OBJDIR)\$(RNDIR)\SAMP mkdir $(OBJDIR)\$(RNDIR)\SAMP
+	@if not exist $(OBJDIR)\$(HOOKDIR) mkdir $(OBJDIR)\$(HOOKDIR)
 	@if exist $(TARGET) del $(TARGET)
 
 $(OBJDIR)/$(SRCDIR)/%.o: $(SRCDIR)/%.cpp
@@ -73,9 +78,13 @@ $(OBJDIR)/$(RNDIR)/%.o: $(RNDIR)/%.cpp
 	@echo compile $(@:$(OBJDIR)/%.o=%.cpp)
 	@$(CXX) $(CFLAGS) $(INCDIRS:%=-I%) -c $(@:$(OBJDIR)/%.o=%.cpp) -o $@
 
+$(OBJDIR)/$(HOOKDIR)/%.o: $(HOOKDIR)/%.c
+	@echo compile $(@:$(OBJDIR)/%.o=%.c)
+	@$(CC) -g -Wall -pipe -w -march=armv7-a -mfloat-abi=softfp -mfpu=neon -DINLINEHOOK_NO_FREEZE $(INCDIRS:%=-I%) -c $(@:$(OBJDIR)/%.o=%.c) -o $@
+
 $(TARGET):
 	@echo linking $@
-	@$(CXX) $(CFLAGS) $(LIBDIRS:%=-L%) $(SRCFILES:%.cpp=$(OBJDIR)/$(SRCDIR)/%.o) $(RNFILES:%.cpp=$(OBJDIR)/$(RNDIR)/%.o) $(LIBS:%=-l%) -o $(TARGET)
+	@$(CXX) $(CFLAGS) $(LIBDIRS:%=-L%) $(SRCFILES:%.cpp=$(OBJDIR)/$(SRCDIR)/%.o) $(RNFILES:%.cpp=$(OBJDIR)/$(RNDIR)/%.o) $(HOOKFILES:%.c=$(OBJDIR)/$(HOOKDIR)/%.o) $(LIBS:%=-l%) -o $(TARGET)
 	@$(STRIP) --remove-section=.comment --remove-section=.note --remove-section=.gnu.version --strip-all $(TARGET)
 	
 clean:

@@ -20,8 +20,8 @@
 #ifndef __RAK_SERVER_H
 #define __RAK_SERVER_H
 
-#include "RakPeer.h"
-#include "RakServerInterface.h"
+#include "rakpeer.h"
+#include "rakserverinterface.h"
 #include "Export.h"
 
 // #pragma deprecated(RakServer)

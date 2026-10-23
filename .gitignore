@@ -1,3 +1,5 @@
 libSAMP.so
 obj
 dummy_libs
+obj-ndk
+

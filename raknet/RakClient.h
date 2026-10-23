@@ -20,7 +20,7 @@
 #ifndef __RAK_CLIENT_H
 #define __RAK_CLIENT_H
 
-#include "RakPeer.h"
+#include "rakpeer.h"
 #include "RakClientInterface.h" 
 
 // #pragma deprecated(RakClient)

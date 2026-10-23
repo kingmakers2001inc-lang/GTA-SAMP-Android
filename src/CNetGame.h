@@ -10,6 +10,10 @@
 
 #define SAMP_SETTINGS_FILE		"/sdcard/SAMP/settings.ini"
 
+// open.mp only accepts 0.3.7 (4057) and 0.3DL (4062) clients
+#define SAMP_NETCODE_VERSION	4057
+#define SAMP_VERSION_STRING		"0.3.7"
+
 class CNetGame
 {
 /*private*/public: //TODO!!!
@@ -38,6 +42,10 @@ public:
 	CPlayerPool*		getPlayerPool();
 	
 	void DoSync();
+	
+	void SendChatMessage(const char* a_szText);
+	void SendCommand(const char* a_szCommand);
+	void SendDialogResponse(int a_iDialogID, int a_iButton, int a_iListItem, const char* a_szInput);
 	
 	static CNetGame* Instance()
 	{

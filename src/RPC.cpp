@@ -7,6 +7,8 @@
 #include "RPC.h"
 #include "CNetGame.h"
 #include "utils.h"
+#include "CChat.h"
+#include "CDialog.h"
 
 void ServerJoin(RPCParameters *rpcParams)
 {
@@ -25,15 +27,24 @@ void ServerJoin(RPCParameters *rpcParams)
 	l_bitStream.Read(l_cIsNPC);
 	l_bitStream.Read(l_ucNickLen);	
 	l_bitStream.Read(l_szNickName, l_ucNickLen);
+	l_szNickName[l_ucNickLen] = 0;
 
-	l_pNetGame->getPlayerPool()->New(l_PlayerID, l_szNickName, (bool)l_cIsNPC);
+	l_pNetGame->getPlayerPool()->New(l_PlayerID, l_szNickName, (bool)l_cIsNPC, l_uiColor);
 	
 	log("ServerJoin -> %s (%d)!", l_szNickName, l_PlayerID);
 }
 
 void ServerQuit(RPCParameters *rpcParams)
 {
-	log("ServerQuit called!");
+	RakNet::BitStream bsData(rpcParams->input, rpcParams->numberOfBitsOfData / 8 + 1, false);
+	_PlayerID playerID;
+	unsigned char reason;
+	
+	bsData.Read(playerID);
+	bsData.Read(reason);
+	
+	CNetGame::Instance()->getPlayerPool()->Delete(playerID);
+	log("ServerQuit -> %d (reason %d)", playerID, reason);
 }
 
 int g_iNetModeNormalOnfootSendRate;
@@ -116,6 +127,7 @@ void InitGame(RPCParameters *rpcParams)
 	l_pNetGame->getPlayerPool()->setLocalPlayerID(MyPlayerID);	
 	
 	log("Connected to %.64s", g_szHostName);
+	CChat::AddInfoMessage("Connected to {FFFFFF}%.64s", g_szHostName);
 	
 	l_pNetGame->m_isInGame = true;
 }
@@ -148,17 +160,59 @@ void WorldVehicleRemove(RPCParameters *rpcParams)
 
 void ConnectionRejected(RPCParameters *rpcParams)
 {
-	log("ConnectionRejected called!");
+	RakNet::BitStream bsData(rpcParams->input, rpcParams->numberOfBitsOfData / 8 + 1, false);
+	unsigned char reason = 0;
+	bsData.Read(reason);
+	
+	// open.mp NewConnectionResult values
+	static const char* reasons[] = { "Server rejected the connection.", "Wrong client version (the server needs SA-MP 0.3.7).",
+		"Invalid or taken name: use Firstname_Lastname in settings.ini.", "Modified client rejected.", "The server is full." };
+	const char* text = reason < sizeof(reasons) / sizeof(reasons[0]) ? reasons[reason] : reasons[0];
+	
+	log("ConnectionRejected -> %d", reason);
+	CChat::AddMessage(0xFF6347FF, text);
 }
 
 void ClientMessage(RPCParameters *rpcParams)
 {
-	log("ClientMessage called!");
+	RakNet::BitStream bsData(rpcParams->input, rpcParams->numberOfBitsOfData / 8 + 1, false);
+	uint32_t color;
+	uint32_t length;
+	char message[512];
+	
+	bsData.Read(color);
+	bsData.Read(length);
+	if(length >= sizeof(message))
+		length = sizeof(message) - 1;
+	bsData.Read(message, length);
+	message[length] = 0;
+	
+	CChat::AddMessage(color | 0xFF, message);
 }
 
 void Chat(RPCParameters *rpcParams)
 {
-	log("Chat called!");
+	RakNet::BitStream bsData(rpcParams->input, rpcParams->numberOfBitsOfData / 8 + 1, false);
+	_PlayerID playerID;
+	unsigned char length;
+	char message[256];
+	
+	bsData.Read(playerID);
+	bsData.Read(length);
+	bsData.Read(message, length);
+	message[length] = 0;
+	
+	CNetGame* netGame = CNetGame::Instance();
+	CPlayerPool* pool = netGame->getPlayerPool();
+	
+	if(playerID == pool->getLocalPlayerID())
+	{
+		CChat::AddChatMessage(netGame->m_szNickName, 0xFFFFFFFF, message);
+	}
+	else if(CPlayer* player = pool->GetPlayer(playerID))
+	{
+		CChat::AddChatMessage(player->getNickName(), player->getColor(), message);
+	}
 }
 
 void UpdateScoresPingsIPs(RPCParameters *rpcParams)
@@ -173,7 +227,30 @@ void ScrInitMenu(RPCParameters *rpcParams)
 
 void ScrDialogBox(RPCParameters *rpcParams)
 {
-	log("ScrDialogBox called!");
+	RakNet::BitStream bsData(rpcParams->input, rpcParams->numberOfBitsOfData / 8 + 1, false);
+	int16_t dialogID;
+	unsigned char style, length;
+	char title[256], button1[256], button2[256];
+	static char body[DIALOG_MAX_BODY + 1];
+	
+	bsData.Read(dialogID);
+	bsData.Read(style);
+	
+	bsData.Read(length);
+	bsData.Read(title, length);
+	title[length] = 0;
+	
+	bsData.Read(length);
+	bsData.Read(button1, length);
+	button1[length] = 0;
+	
+	bsData.Read(length);
+	bsData.Read(button2, length);
+	button2[length] = 0;
+	
+	stringCompressor->DecodeString(body, DIALOG_MAX_BODY, &bsData);
+	
+	CDialog::Show(dialogID, style, title, body, button1, button2);
 }
 
 void ScrGameText(RPCParameters *rpcParams)

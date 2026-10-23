@@ -15,7 +15,7 @@
 /// option) any later version.
 
 #include "RakNetDefines.h"
-#include "RakPeer.h"
+#include "rakpeer.h"
 #include "NetworkTypes.h"
 
 #ifdef __USE_IO_COMPLETION_PORTS
@@ -118,6 +118,12 @@ int PlayerIDAndIndexComp( const PlayerID &key, const PlayerIDAndIndex &data )
 #endif
 
 static const unsigned int SYN_COOKIE_OLD_RANDOM_NUMBER_DURATION = 5000;
+
+// SA-MP 0.3.7 / open.mp servers answer the first open connection request with a
+// cookie that must be echoed back (xor 0x6969) before they accept us
+#define SAMP_COOKIE_XOR 0x6969
+static bool g_bHasConnectionCookie = false;
+static unsigned short g_usConnectionCookie = 0;
 static const int MAX_OFFLINE_DATA_LENGTH=400; // I set this because I limit ID_CONNECTION_REQUEST to 512 bytes, and the password is appended to that packet.
 
 //#define _DO_PRINTF
@@ -2473,6 +2479,7 @@ bool RakPeer::SendConnectionRequest( const char* host, unsigned short remotePort
 #ifdef _RAKNET_THREADSAFE
 	rakPeerMutexes[requestedConnectionList_Mutex].Lock();
 #endif
+	g_bHasConnectionCookie = false;
 	RequestedConnectionStruct *rcs = requestedConnectionList.WriteLock();
 	rcs->playerId=playerId;
 	rcs->nextRequestTime=RakNet::GetTime();
@@ -3784,6 +3791,25 @@ void ProcessNetworkPacket( const unsigned int binaryAddress, const unsigned shor
 			rakPeer->AddPacketToProducer(packet);
 		}
 	}
+	else if ((unsigned char)(data)[0] == (unsigned char) ID_OPEN_CONNECTION_COOKIE && length == sizeof(unsigned char)+sizeof(unsigned short))
+	{
+		g_usConnectionCookie = *(unsigned short*)&data[1];
+		g_bHasConnectionCookie = true;
+
+		// Resend the request with the cookie straight away
+		RakPeer::RequestedConnectionStruct *rcsFirst, *rcs;
+		rcsFirst = rakPeer->requestedConnectionList.ReadLock();
+		rcs=rcsFirst;
+		while (rcs)
+		{
+			if (rcs->actionToTake==RakPeer::RequestedConnectionStruct::CONNECT && rcs->playerId==playerId)
+				rcs->nextRequestTime=0;
+			rcs=rakPeer->requestedConnectionList.ReadLock();
+		}
+		if (rcsFirst)
+			rakPeer->requestedConnectionList.CancelReadLock(rcsFirst);
+		return;
+	}
 	//
 	else if ((unsigned char)(data)[0] == (unsigned char) ID_OPEN_CONNECTION_REPLY && length <= sizeof(unsigned char)*2)
 	{
@@ -4255,7 +4281,10 @@ bool RakPeer::RunUpdateCycle( void )
 
 			char c[3]; // 0.3d RAKSAMP HACK PONPON
 			c[0] = ID_OPEN_CONNECTION_REQUEST;
-			*(unsigned short*)&c[1] = (unsigned short) rcs->playerId.port ^ NETCODE_OPENCONNLULZ;
+			if (g_bHasConnectionCookie)
+				*(unsigned short*)&c[1] = g_usConnectionCookie ^ SAMP_COOKIE_XOR;
+			else
+				*(unsigned short*)&c[1] = (unsigned short) rcs->playerId.port ^ NETCODE_OPENCONNLULZ;
 			
 			unsigned i;
 			for (i=0; i < messageHandlerList.Size(); i++)
