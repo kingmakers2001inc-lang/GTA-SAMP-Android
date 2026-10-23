@@ -24,7 +24,8 @@ Phones and ARM servers (including Oracle's free ARM instances) can't run open.mp
 Codespaces stop after about 30 minutes without activity (raise it to 4 hours in GitHub
 Settings → Codespaces) and give around 60 free hours a month. They're meant for development
 and testing, so use this to play with friends, not as 24/7 public hosting. When the codespace
-restarts, run `./server/deploy/codespace.sh` again (the secret is remembered).
+restarts, it starts the server and tunnel again by itself (the secret is remembered; the
+startup log is `/tmp/grand-rp-start.log`).
 
 ## Install
 
