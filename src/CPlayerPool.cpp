@@ -24,7 +24,7 @@ CPlayerPool::~CPlayerPool()
 }
 
 
-bool CPlayerPool::New(_PlayerID a_PlayerID, char* a_szNickName, bool a_bIsNPC)
+bool CPlayerPool::New(_PlayerID a_PlayerID, char* a_szNickName, bool a_bIsNPC, uint32_t a_uiColor)
 {
 	CPlayer* 	l_pPlayer;
 	if(isPlayerConnected(a_PlayerID) || a_PlayerID == m_LocalPlayerID) return false;
@@ -35,6 +35,7 @@ bool CPlayerPool::New(_PlayerID a_PlayerID, char* a_szNickName, bool a_bIsNPC)
 	{
 		l_pPlayer->setNickName(a_szNickName);
 		l_pPlayer->setNPC(a_bIsNPC);
+		l_pPlayer->setColor(a_uiColor);
 		
 		m_Players[a_PlayerID] = l_pPlayer;
 		return true;

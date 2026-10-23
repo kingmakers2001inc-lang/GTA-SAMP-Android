@@ -4,6 +4,8 @@
 enum
 {
 	RPC_ClientJoin = 25,
+	RPC_ServerCommand = 50,
+	RPC_DialogResponse = 62,
 	RPC_WorldPlayerAdd = 32,
 	RPC_ScrPlayAudioStream = 41,
 	RPC_ScrDialogBox = 61,

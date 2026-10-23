@@ -20,7 +20,7 @@
 
 #include "NetworkTypes.h"
 #include "PacketPriority.h"
-#include "RakPeerInterface.h"
+#include "rakpeerinterface.h"
 #include "BitStream.h"
 #include "RakNetStatistics.h" 
 

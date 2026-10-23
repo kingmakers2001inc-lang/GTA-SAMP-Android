@@ -19,7 +19,7 @@
 #define __RAK_PEER_H
 
 #include "Export.h"
-#include "RakPeerInterface.h"
+#include "rakpeerinterface.h"
 #include "ReliabilityLayer.h"
 #include "RPCNode.h"
 #include "RSACrypt.h"

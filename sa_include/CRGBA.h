@@ -3,11 +3,11 @@
 
 class CRGBA
 {
-private:
-	float r;
-	float g;
-	float b;
-	float a;
+public:
+	unsigned char r;
+	unsigned char g;
+	unsigned char b;
+	unsigned char a;
 	
 public:
 	CRGBA(unsigned char, unsigned char, unsigned char, unsigned char);

@@ -30,7 +30,7 @@ class CPlayer
 {
 private:
 	CPed*		 	m_pPed = nullptr;
-	char*			m_pszNickName = "";
+	char*			m_pszNickName = nullptr;
 	bool			m_bIsStreamed = false;
 	bool 			m_bIsNPC = false;	
 	uint32_t		m_uiNickColor = 0;
@@ -45,6 +45,9 @@ public:
 	~CPlayer();
 	
 	void setNickName(char* a_pszNickName);
+	const char* getNickName() { return m_pszNickName ? m_pszNickName : ""; }
+	void setColor(uint32_t a_uiColor) { m_uiNickColor = a_uiColor; }
+	uint32_t getColor() { return m_uiNickColor; }
 	void setNPC(bool a_bSet);	
 	
 	void ProcessPlayerSync(Packet* a_pPacket);

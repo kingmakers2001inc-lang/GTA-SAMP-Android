@@ -1,0 +1,29 @@
+{
+    "name": "Grand RP | Mobile Roleplay",
+    "max_players": 100,
+    "language": "English",
+    "password": "",
+    "use_lan_mode": false,
+    "enable_query": true,
+    "announce": true,
+    "pawn": {
+        "main_scripts": ["grand_rp 1"],
+        "side_scripts": [],
+        "legacy_plugins": []
+    },
+    "network": {
+        "port": 7777,
+        "bind": ""
+    },
+    "rcon": {
+        "enable": false,
+        "password": "changeme"
+    },
+    "website": "",
+    "chat_input_filter": true,
+    "game": {
+        "use_entry_exit_markers": false,
+        "use_player_ped_anims": true,
+        "use_stunt_bonuses": false
+    }
+}

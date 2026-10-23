@@ -2,6 +2,10 @@
 #include <GTASA.h>
 #include "CNetGame.h"
 #include "utils.h"
+#include "CGUI.h"
+#include "inlineHook.h"
+
+#define MAX_TOUCH_POINTERS	16
 
 int CRunningScript__Process_hook(void* p)
 {
@@ -19,7 +23,7 @@ int CRunningScript__Process_hook(void* p)
 			l_pLocalPlayer->Teleport(CVector(0.0f, 0.0f, 3.0f), 0);
 		}
 		
-		CNetGame::Instance()->DbgConnect();	
+		CNetGame::Instance()->Connect();	
 	}
 	
 	CNetGame::Instance()->Process();
@@ -54,7 +58,8 @@ unsigned int GetTickCount();
 extern unsigned int lastOnFootSyncTick;
 extern int g_iNetModeNormalOnfootSendRate;
 
-void RenderSAMP()
+// Debug overlay with the local player's position, enable with -DSAMP_DEBUG_OVERLAY
+void RenderDebugOverlay()
 {
 	CPlayerPed* ped = FindPlayerPed(-1);
 	if(!ped)
@@ -99,18 +104,58 @@ void Render2dStuffAfterFade_hook()
 {
 	CHud::DrawAfterFade();
 	TemporaryFPSVisualization();
-	RenderSAMP();
 	emu_GammaSet(1);
 	CMessages::Display(0);
 	CFont::RenderFontBuffer();
+#ifdef SAMP_DEBUG_OVERLAY
+	RenderDebugOverlay();
+	CFont::RenderFontBuffer();
+#endif
+	GUI::Render();
 	CCredits::Render();
 	emu_GammaSet(0);
+}
+
+static void (*AND_TouchEvent_orig)(int, int, int, int) = nullptr;
+static bool s_bTouchCaptured[MAX_TOUCH_POINTERS];
+
+// Touches the UI accepts on press stay with the UI until release, so the game never sees half a gesture
+void AND_TouchEvent_hook(int type, int num, int x, int y)
+{
+	bool captured = false;
+	
+	if(num >= 0 && num < MAX_TOUCH_POINTERS)
+	{
+		if(type == TOUCH_PRESS)
+		{
+			s_bTouchCaptured[num] = GUI::OnTouch(type, num, (float) x, (float) y);
+			captured = s_bTouchCaptured[num];
+		}
+		else if(s_bTouchCaptured[num])
+		{
+			GUI::OnTouch(type, num, (float) x, (float) y);
+			captured = true;
+			if(type == TOUCH_RELEASE)
+				s_bTouchCaptured[num] = false;
+		}
+	}
+	
+	if(!captured)
+		AND_TouchEvent_orig(type, num, x, y);
+}
+
+// Address of a non-virtual member function (the first word of an ARM member pointer)
+template<typename T> void* MemberAddress(T func)
+{
+	union { T func; void* addr; } u;
+	u.func = func;
+	return u.addr;
 }
 
 void InitHooks()
 {
 	// Remove script processing
-	ARMBIGJMP((void *)(&CRunningScript::Process), (void *)(CRunningScript__Process_hook));
+	ARMBIGJMP(MemberAddress(&CRunningScript::Process), (void *)(CRunningScript__Process_hook));
 	
 	// Remove population spawning
 	ARMBIGJMP((void *)(CPopCycle::Update), (void *)(CPopCycle__Update_hook));
@@ -120,4 +165,11 @@ void InitHooks()
 	
 	// Hook render
 	ARMBIGJMP((void *)(Render2dStuffAfterFade), (void *)(Render2dStuffAfterFade_hook));
+	
+	// Touch input for chat and dialogs. This hook calls the original, so it needs a relocating trampoline
+	if(registerInlineHook((uint32_t) AND_TouchEvent, (uint32_t) AND_TouchEvent_hook, (uint32_t**) &AND_TouchEvent_orig) != ELE7EN_OK
+		|| inlineHook((uint32_t) AND_TouchEvent) != ELE7EN_OK)
+	{
+		log("Failed to hook AND_TouchEvent, touch UI disabled");
+	}
 }

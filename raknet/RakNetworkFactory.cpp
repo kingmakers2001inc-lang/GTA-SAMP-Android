@@ -16,12 +16,12 @@
 
 #include "LogCommandParser.h"
 #include "RakNetworkFactory.h"
-#include "RakServerInterface.h"
+#include "rakserverinterface.h"
 #include "RakClientInterface.h"
 #include "RakServer.h"
 #include "RakClient.h"
-#include "RakPeerInterface.h"
-#include "RakPeer.h"
+#include "rakpeerinterface.h"
+#include "rakpeer.h"
 
 RakClientInterface* RakNetworkFactory::GetRakClientInterface( void )
 {

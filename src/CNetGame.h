@@ -8,6 +8,12 @@
 
 #include "CPlayerPool.h"
 
+#define SAMP_SETTINGS_FILE		"/sdcard/SAMP/settings.ini"
+
+// open.mp only accepts 0.3.7 (4057) and 0.3DL (4062) clients
+#define SAMP_NETCODE_VERSION	4057
+#define SAMP_VERSION_STRING		"0.3.7"
+
 class CNetGame
 {
 /*private*/public: //TODO!!!
@@ -16,11 +22,16 @@ class CNetGame
 	CPlayerPool*			m_PlayerPool = nullptr;
 	bool					m_isInGame = false;
 	
+	char					m_szHost[64] = "127.0.0.1";
+	unsigned short			m_usPort = 7777;
+	char					m_szNickName[25] = "Android_Player";
+	
 public:
 	CNetGame();
 	~CNetGame();
 
-	void DbgConnect();
+	void LoadSettings();
+	void Connect();
 	void Process();
 	
 	/* Packets */
@@ -31,6 +42,10 @@ public:
 	CPlayerPool*		getPlayerPool();
 	
 	void DoSync();
+	
+	void SendChatMessage(const char* a_szText);
+	void SendCommand(const char* a_szCommand);
+	void SendDialogResponse(int a_iDialogID, int a_iButton, int a_iListItem, const char* a_szInput);
 	
 	static CNetGame* Instance()
 	{

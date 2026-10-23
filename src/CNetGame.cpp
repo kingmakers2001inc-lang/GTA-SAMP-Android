@@ -1,9 +1,16 @@
 #include <thread>
+#include <stdio.h>
+#include <string.h>
+#include <string>
+#include <sys/time.h>
+#include <time.h>
+#include <stdlib.h>
 
 #include "CNetGame.h"
 #include "RPC.h"
 #include "AuthTable.h"
 #include "utils.h"
+#include "CChat.h"
 
 CNetGame* CNetGame::m_SingletonInstance = nullptr;
 
@@ -13,6 +20,11 @@ CNetGame::CNetGame()
 	RegisterRPCs(m_rakClientInterface);	
 	
 	m_PlayerPool = new CPlayerPool();
+	
+	// Seeds the random input of the connection serial, otherwise every phone sends the same one
+	srand(time(nullptr));
+	
+	LoadSettings();
 }
 
 CNetGame::~CNetGame()
@@ -26,10 +38,40 @@ CNetGame::~CNetGame()
 	}
 }
 
-void CNetGame::DbgConnect()
+void CNetGame::LoadSettings()
 {
-	m_rakClientInterface->Connect("192.168.1.246", 7777, 0, 0, 0); // Balika
-	// m_rakClientInterface->Connect("192.168.0.35", 7777, 0, 0, 0); // Sasuke
+	// Optional override file, one "key=value" per line: host, port, name
+	FILE* f = fopen(SAMP_SETTINGS_FILE, "r");
+	if(!f)
+	{
+		log("No %s, using defaults", SAMP_SETTINGS_FILE);
+		return;
+	}
+	
+	char line[128];
+	while(fgets(line, sizeof(line), f))
+	{
+		line[strcspn(line, "\r\n")] = 0;
+		char* value = strchr(line, '=');
+		if(!value)
+			continue;
+		*value++ = 0;
+		
+		if(!strcmp(line, "host"))
+			strncpy(m_szHost, value, sizeof(m_szHost) - 1);
+		else if(!strcmp(line, "port"))
+			m_usPort = (unsigned short) atoi(value);
+		else if(!strcmp(line, "name") && strlen(value) >= 3)
+			strncpy(m_szNickName, value, sizeof(m_szNickName) - 1);
+	}
+	fclose(f);
+}
+
+void CNetGame::Connect()
+{
+	log("Connecting to %s:%d as %s", m_szHost, m_usPort, m_szNickName);
+	CChat::AddInfoMessage("Connecting to %s:%d...", m_szHost, m_usPort);
+	m_rakClientInterface->Connect(m_szHost, m_usPort, 0, 0, 0);
 }
 
 unsigned int GetTickCount()
@@ -54,10 +96,13 @@ void CNetGame::Process()
 		
 		switch(packetId)
 		{
-			case ID_DISCONNECTION_NOTIFICATION: log("Disconnect notification recived!"); break;
-			case ID_CONNECTION_LOST: log("Connection lost!"); break;
+			case ID_DISCONNECTION_NOTIFICATION: CChat::AddInfoMessage("Server closed the connection."); m_isInGame = false; break;
+			case ID_CONNECTION_LOST: CChat::AddInfoMessage("Lost connection to the server."); m_isInGame = false; break;
+			case ID_CONNECTION_BANNED: CChat::AddInfoMessage("You are banned from this server."); break;
+			case ID_NO_FREE_INCOMING_CONNECTIONS: CChat::AddInfoMessage("The server is full."); break;
+			case ID_INVALID_PASSWORD: CChat::AddInfoMessage("Wrong server password."); break;
 			case ID_MODIFIED_PACKET: log("Modified packet!"); break;
-			case ID_CONNECTION_ATTEMPT_FAILED: log("Failed to connect!"); break;
+			case ID_CONNECTION_ATTEMPT_FAILED: CChat::AddInfoMessage("Could not connect to %s:%d", m_szHost, m_usPort); break;
 			case ID_CONNECTION_REQUEST_ACCEPTED: log("Request accepted!"); Packet_ConnectionSucceeded(pPacket); break;
 			case ID_AUTH_KEY: log("Auth key!"); Packet_AUTH_KEY(pPacket); break;
 			case ID_PLAYER_SYNC: log("PlayerSync packet!"); m_PlayerPool->ProcessPlayerSync(pPacket); break;
@@ -87,10 +132,10 @@ CPlayerPool* CNetGame::getPlayerPool()
 
 void CNetGame::Packet_AUTH_KEY(Packet *p)
 {
-	char * auth_key = "";
-	unsigned char byteAuthKeyLen;
+	const char* auth_key = "";
+	unsigned char byteAuthKeyLen = 0;
 
-	for (int i = 0; i < 1279; ++i)
+	for (unsigned int i = 0; i < sizeof(AuthKeyTable) / sizeof(AuthKeyTable[0]); ++i)
 	{
 		if (strcmp((char*) (p->data + 2), AuthKeyTable[i][0]) == 0)
 		{
@@ -127,27 +172,20 @@ bool GenerateSerial(char* input, char** output, int* output_len, int key)
 	
 	// Convert binary hash to string
 	char sha_hash[41];
-	memset(sha_hash, 0, sizeof(sha_hash));
 	for (int i = 0; i < sizeof(sha_hash_bin); ++i)
-		sprintf(sha_hash, "%s%02X", sha_hash, sha_hash_bin[i]);
+		sprintf(sha_hash + i * 2, "%02X", sha_hash_bin[i]);
 
 	log("GenerateSerial() -> Hashed input: %s", sha_hash);
 
-	// Encrypt the hash with ttmath
+	// The server accepts any serial that is a multiple of 1001
 	ttmath::UInt<100> math;
-	log("GenerateSerial() -> Step 1");
 	math.FromString(sha_hash, 16);
-	log("GenerateSerial() -> Step 2");
-	math.SerialEncrypt(key);
-	log("GenerateSerial() -> Step 3");
-	const char* result = math.ToString(16).c_str();			// Crashy here
-	log("GenerateSerial() -> Step 4");
+	math.MulInt(key);
+	std::string result = math.ToString(16);
 	
-	*output_len = strlen(result);
-	*output = new char[*output_len];
-	log("GenerateSerial() -> Step 5");
-	strcpy(*output, result);
-	log("GenerateSerial() -> Step 6, everything is ok");
+	*output_len = result.length();
+	*output = new char[*output_len + 1];
+	strcpy(*output, result.c_str());
 	return true;
 }
 
@@ -251,6 +289,36 @@ void CNetGame::DoSync()
 	}
 }
 
+void CNetGame::SendChatMessage(const char* a_szText)
+{
+	RakNet::BitStream bsSend;
+	BYTE byteLen = (BYTE) strlen(a_szText);
+	bsSend.Write(byteLen);
+	bsSend.Write(a_szText, byteLen);
+	SEND_RPC(m_rakClientInterface, Chat, bsSend);
+}
+
+void CNetGame::SendCommand(const char* a_szCommand)
+{
+	RakNet::BitStream bsSend;
+	uint32_t len = strlen(a_szCommand);
+	bsSend.Write(len);
+	bsSend.Write(a_szCommand, len);
+	SEND_RPC(m_rakClientInterface, ServerCommand, bsSend);
+}
+
+void CNetGame::SendDialogResponse(int a_iDialogID, int a_iButton, int a_iListItem, const char* a_szInput)
+{
+	RakNet::BitStream bsSend;
+	BYTE byteLen = (BYTE) strlen(a_szInput);
+	bsSend.Write((int16_t) a_iDialogID);
+	bsSend.Write((BYTE) a_iButton);
+	bsSend.Write((int16_t) a_iListItem);
+	bsSend.Write(byteLen);
+	bsSend.Write(a_szInput, byteLen);
+	SEND_RPC(m_rakClientInterface, DialogResponse, bsSend);
+}
+
 void CNetGame::Packet_ConnectionSucceeded(Packet *p)
 {
 	RakNet::BitStream bsSuccAuth((unsigned char *)p->data, p->length, false);
@@ -275,20 +343,20 @@ void CNetGame::Packet_ConnectionSucceeded(Packet *p)
 
 	RakNet::BitStream bsSend;
 
-	int iVersion = 4047;
+	int iVersion = SAMP_NETCODE_VERSION;
 	bsSend.Write(iVersion);
 	
 	BYTE byteMod = 1;
 	bsSend.Write(byteMod);
 	
-	BYTE byteNameLen = (BYTE) strlen("Android");
+	BYTE byteNameLen = (BYTE) strlen(m_szNickName);
 	bsSend.Write(byteNameLen);
-	bsSend.Write("Android", byteNameLen);
+	bsSend.Write(m_szNickName, byteNameLen);
 	
 	unsigned int uiClientChallengeResponse = uiChallenge ^ iVersion;
 	bsSend.Write(uiClientChallengeResponse);
 	
-	char fucku[128];
+	char fucku[129];
 	gen_random(fucku, 128);
 	char* auth_bs;
 	int AuthBSLen;
@@ -297,7 +365,7 @@ void CNetGame::Packet_ConnectionSucceeded(Packet *p)
 	bsSend.Write((BYTE) AuthBSLen);
 	bsSend.Write(auth_bs, AuthBSLen);
 	
-	char szClientVer[] = "0.3z-R1";
+	char szClientVer[] = SAMP_VERSION_STRING;
 	const BYTE iClientVerLen = (sizeof(szClientVer)-1);
 	bsSend.Write(iClientVerLen);
 	bsSend.Write(szClientVer, iClientVerLen);

@@ -19,7 +19,7 @@ public:
 	CPlayerPool();
 	~CPlayerPool();
 
-	bool 			New(_PlayerID a_PlayerID, char* a_szNickName, bool a_bIsNPC);
+	bool 			New(_PlayerID a_PlayerID, char* a_szNickName, bool a_bIsNPC, uint32_t a_uiColor);
 	bool 			Delete(_PlayerID a_PlayerID);
 	CPlayer*		GetPlayer(_PlayerID a_PlayerID);
 	CLocalPlayer*	GetLocalPlayer();
@@ -27,6 +27,7 @@ public:
 	
 	bool isPlayerConnected(_PlayerID a_PlayerID);	
 	void setLocalPlayerID(_PlayerID a_PlayerID);
+	_PlayerID getLocalPlayerID() { return m_LocalPlayerID; }
 	
 	void ProcessPlayerSync(Packet* a_pPacket);
 	

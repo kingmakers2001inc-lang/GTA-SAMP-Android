@@ -21,6 +21,7 @@
 #include "CRect.h"
 #include "CRGBA.h"
 #include "CRunningScript.h"
+#include "CSprite2d.h"
 #include "CStreaming.h"
 #include "CVector.h"
 #include "CVehicle.h"
@@ -34,5 +35,11 @@ void Render2dStuffAfterFade();
 void AsciiToGxtChar(const char*, unsigned short *);
 void TemporaryFPSVisualization();
 void emu_GammaSet(unsigned char);
+
+int OS_ScreenGetWidth();
+int OS_ScreenGetHeight();
+
+// type: 1 = release, 2 = press, 3 = move; num = pointer index; x/y in screen pixels
+void AND_TouchEvent(int type, int num, int x, int y);
 
 #endif

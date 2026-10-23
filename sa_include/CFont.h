@@ -19,6 +19,8 @@ public:
 	static void SetDropColor(CRGBA);
 	static void SetScale(float);
 	static void SetOrientation(unsigned char);
+	static void SetJustify(unsigned char);
+	static float GetStringWidth(unsigned short *, unsigned char, unsigned char);
 };
 
 #endif

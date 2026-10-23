@@ -27,6 +27,8 @@ CPlayer::CPlayer()
 
 CPlayer::~CPlayer()
 {
+	delete [] m_pszNickName;
+	
 	if(m_pPed)
 	{
 		CWorld::Remove(m_pPed);
