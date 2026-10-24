@@ -23,6 +23,7 @@
 #include "CRunningScript.h"
 #include "CSprite2d.h"
 #include "CStreaming.h"
+#include "GxtChar.h"
 #include "CVector.h"
 #include "CVehicle.h"
 #include "CWanted.h"
@@ -32,7 +33,7 @@ extern int gGameState;
 CPlayerPed* FindPlayerPed(int id);
 void ToggleDebugFPS();
 void Render2dStuffAfterFade();
-void AsciiToGxtChar(const char*, unsigned short *);
+void AsciiToGxtChar(const char*, GxtChar *);
 void TemporaryFPSVisualization();
 void emu_GammaSet(unsigned char);
 

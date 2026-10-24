@@ -47,7 +47,7 @@ float GUI::LineHeight()
 }
 
 // Converts to the engine's text format, dropping '~' so server text can't inject font tokens
-static void ToGxt(const char* text, int len, unsigned short* out)
+static void ToGxt(const char* text, int len, GxtChar* out)
 {
 	char buffer[MAX_TEXT_LEN + 1];
 	if(len > MAX_TEXT_LEN)
@@ -90,7 +90,7 @@ static float SegmentWidth(const char* text, int len)
 	if(len <= 0)
 		return 0.0f;
 
-	unsigned short gxt[MAX_TEXT_LEN + 1];
+	GxtChar gxt[MAX_TEXT_LEN + 1];
 	ToGxt(text, len, gxt);
 	return CFont::GetStringWidth(gxt, 1, 0);
 }
@@ -131,7 +131,7 @@ static void DrawSegment(float x, float y, const char* text, int len, uint32_t rg
 	if(len <= 0)
 		return;
 
-	unsigned short gxt[MAX_TEXT_LEN + 1];
+	GxtChar gxt[MAX_TEXT_LEN + 1];
 	ToGxt(text, len, gxt);
 	CFont::SetColor(CRGBA(rgba >> 24, (rgba >> 16) & 0xFF, (rgba >> 8) & 0xFF, rgba & 0xFF));
 	CFont::PrintString(x, y, gxt);

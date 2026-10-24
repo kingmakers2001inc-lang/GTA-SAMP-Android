@@ -11,7 +11,10 @@ public:
 	
 public:
 	CRGBA(unsigned char, unsigned char, unsigned char, unsigned char);
+#if !defined(__aarch64__)
+	// The 32-bit build declares a destructor, which makes CRGBA pass by reference; the 64-bit build has none
 	~CRGBA();
+#endif
 };
 
 #endif

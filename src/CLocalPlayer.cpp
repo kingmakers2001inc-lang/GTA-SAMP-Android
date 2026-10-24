@@ -25,12 +25,15 @@ CPlayerPed* CLocalPlayer::CreateGTAPlayer()
 {
 	CStreaming::RequestSpecialModel(0, "player", 26);
 	CStreaming::LoadAllRequestedModels(true);
+	log("player model loaded");
 	
 	CWorld::PlayerInFocus = 0;
 	CPlayerPed::SetupPlayerPed(CWorld::PlayerInFocus);
+	log("player ped set up");
 	
 	m_GTAPlayerPed = FindPlayerPed(-1);
 	CClothes::RebuildPlayer(m_GTAPlayerPed, false);
+	log("player clothes rebuilt");
 	return m_GTAPlayerPed;
 }
 

@@ -14,19 +14,21 @@ int CRunningScript__Process_hook(void* p)
 	if(l_bProcessed == false)
 	{
 		l_bProcessed = true;
+		log("first script tick: creating the local player");
 		
 		CNetGame* 	l_pNetGame = CNetGame::Instance();
 		CPlayerPed*	l_pLocalPlayer = l_pNetGame->getPlayerPool()->GetLocalPlayer()->CreateGTAPlayer();
+		log("local player ped %p", l_pLocalPlayer);
 		
-#if !defined(__aarch64__)
-		// Virtual call through the reversed 32-bit CPed vtable; not verified on 64-bit builds
+		// Teleport is the same CPed vtable slot in the 2.00 and 2.11.311 builds
 		if(l_pLocalPlayer)
 		{
 			l_pLocalPlayer->Teleport(CVector(0.0f, 0.0f, 3.0f), 0);
+			log("teleported");
 		}
-#endif
 		
-		CNetGame::Instance()->Connect();	
+		CNetGame::Instance()->Connect();
+		log("connecting");
 	}
 	
 	CNetGame::Instance()->Process();
@@ -40,10 +42,20 @@ int CPopCycle__Update_hook()
 	return 0;
 }
 
+static void (*LoadingScreen_orig)(char const*, char const*, char const*) = nullptr;
+
 void LoadingScreen_hook(char const* a1, char const* a2, char const* a3)
 {
-	log("LoadingScreen_hook(%s, %s, %s)", a1, a2, a3);
+	log("LoadingScreen_hook(%s, %s, %s)", a1 ? a1 : "", a2 ? a2 : "", a3 ? a3 : "");
 	
+#if defined(__aarch64__)
+	// 2.11 may do more here than draw, so let the game run its own loading screen
+	if(LoadingScreen_orig)
+	{
+		LoadingScreen_orig(a1, a2, a3);
+		return;
+	}
+#endif
 	CLoadingScreen::NewChunkLoaded();
 }
 
@@ -51,7 +63,7 @@ void LoadingScreen_hook(char const* a1, char const* a2, char const* a3)
 { \
 	char Buffer[200]; \
 	sprintf(Buffer, line, ##__VA_ARGS__); \
-	unsigned short GxtCharBuffer[200]; \
+	GxtChar GxtCharBuffer[200]; \
 	AsciiToGxtChar(Buffer, GxtCharBuffer); \
 	CFont::PrintString(5.0f, 5.0f + l * CFont::GetHeight(false), GxtCharBuffer); \
 	++l; \
@@ -109,8 +121,14 @@ static void (*Render2dStuffAfterFade_orig)() = nullptr;
 // Newer game builds draw more here (touch controls etc.), so run theirs and draw on top
 void Render2dStuffAfterFade_hook()
 {
+	static bool first = true;
+	if(first)
+		log("first 2D render");
 	Render2dStuffAfterFade_orig();
 	GUI::Render();
+	if(first)
+		log("first UI frame drawn");
+	first = false;
 }
 #else
 void Render2dStuffAfterFade_hook()
@@ -169,13 +187,16 @@ template<typename T> void* MemberAddress(T func)
 void InitHooks()
 {
 	// Remove script processing
-	InstallHook(MemberAddress(&CRunningScript::Process), (void *)(CRunningScript__Process_hook));
+	if(!InstallHook(MemberAddress(&CRunningScript::Process), (void *)(CRunningScript__Process_hook)))
+		log("Failed to hook CRunningScript::Process");
 	
 	// Remove population spawning
-	InstallHook((void *)(CPopCycle::Update), (void *)(CPopCycle__Update_hook));
+	if(!InstallHook((void *)(CPopCycle::Update), (void *)(CPopCycle__Update_hook)))
+		log("Failed to hook CPopCycle::Update");
 	
 	// Hook the loading screen function
-	InstallHook((void *)(LoadingScreen), (void *)(LoadingScreen_hook));
+	if(!InstallHook((void *)(LoadingScreen), (void *)(LoadingScreen_hook), (void **) &LoadingScreen_orig))
+		log("Failed to hook LoadingScreen");
 	
 	// Hook render
 #if defined(__aarch64__)

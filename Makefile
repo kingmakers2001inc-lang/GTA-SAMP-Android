@@ -15,7 +15,7 @@ LIBS = log GTASA
 
 SRCDIR = src
 SRCFILES = main.cpp utils.cpp hooks.cpp RPC.cpp CNetGame.cpp CPlayerPool.cpp CPlayer.cpp
-SRCFILES += CLocalPlayer.cpp CGUI.cpp CChat.cpp CDialog.cpp CKeyboard.cpp CScript.cpp hook.cpp
+SRCFILES += CLocalPlayer.cpp CGUI.cpp CChat.cpp CDialog.cpp CKeyboard.cpp CScript.cpp hook.cpp crashlog.cpp
 
 HOOKDIR = inlinehook
 INCDIRS += $(HOOKDIR)

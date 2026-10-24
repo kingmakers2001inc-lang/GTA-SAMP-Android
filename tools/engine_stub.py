@@ -51,7 +51,7 @@ def cmd_stub(args):
     source = os.path.splitext(args.out)[0] + ".S"
     with open(source, "w") as f:
         f.write("\n".join(lines) + "\n")
-    subprocess.check_call([args.cc, "-shared", "-nostdlib", "-Wl,-soname,libGTASA.so", source, "-o", args.out])
+    subprocess.check_call([args.cc, "-shared", "-nostdlib", "-Wl,-soname," + args.soname, source, "-o", args.out])
     print("stub with %d symbols: %s" % (len(symbols), args.out))
 
 
@@ -73,6 +73,7 @@ def main():
     stub.add_argument("--symbols", required=True)
     stub.add_argument("--arch", choices=["arm", "arm64"], required=True)
     stub.add_argument("--cc", required=True, help="NDK clang for the target ABI")
+    stub.add_argument("--soname", default="libGTASA.so", help="libGame.so for 2.11 64-bit")
     stub.add_argument("--out", required=True)
     stub.set_defaults(func=cmd_stub)
 

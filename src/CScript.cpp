@@ -9,14 +9,17 @@
 // GetPointerToLocalVariable in libGTASA.so). The and/or counter, NOT flag and mission
 // flag must stay zero, which the memset below guarantees.
 #if defined(__aarch64__)
-// TODO(2.11): read these from the 64-bit ProcessOneCommand. Pointers are 8 bytes there, so
-// every offset after the list links moves. Until then script commands are disabled.
-#define SCRIPT_LAYOUT_KNOWN			0
-#define SCRIPT_OFFSET_IP			0
-#define SCRIPT_OFFSET_LOCALS		0
-#define SCRIPT_OFFSET_COMPARE_FLAG	0
+// 2.11.311 libGame.so: IP from ProcessOneCommand, locals and mission flag (0x12C) from
+// GetPointerToLocalVariable, compare flag, and/or counter (0x120) and NOT flag (0x122)
+// from UpdateCompareFlag, name from Init
+#define SCRIPT_LAYOUT_KNOWN			1
+#define SCRIPT_OFFSET_NAME			0x10
+#define SCRIPT_OFFSET_IP			0x20
+#define SCRIPT_OFFSET_LOCALS		0x6C
+#define SCRIPT_OFFSET_COMPARE_FLAG	0x115
 #else
 #define SCRIPT_LAYOUT_KNOWN			1
+#define SCRIPT_OFFSET_NAME			0x08
 #define SCRIPT_OFFSET_IP			0x14	// and/or counter 0xF0, NOT flag 0xF2, mission flag 0xFC
 #define SCRIPT_OFFSET_LOCALS		0x3C
 #define SCRIPT_OFFSET_COMPARE_FLAG	0xE5
@@ -45,7 +48,7 @@ bool ScriptCommand(unsigned short opcode, const char* format, ...)
 	}
 	
 	memset(s_Script, 0, sizeof(s_Script));
-	strcpy((char*) s_Script + 8, "samp");
+	strcpy((char*) s_Script + SCRIPT_OFFSET_NAME, "samp");
 	
 	unsigned char* p = s_Code;
 	*(unsigned short*) p = opcode;
