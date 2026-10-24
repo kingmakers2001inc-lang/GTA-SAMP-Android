@@ -214,6 +214,48 @@ def patch_smali(decoded):
         print("patched " + os.path.relpath(path, decoded))
 
 
+# 2.11 downloads its audio packs (data_sfx1, data_sfx2, data_streams) through Google Play, which
+# won't deliver them to a re-signed install. These two patches to Rockstar's downloader start the
+# game with the packs that are present instead of waiting forever for the missing ones.
+DOWNLOADER = "com/rockstargames/oswrapper/DownloaderActivityBase.smali"
+HAS_PACK = re.compile(r"(\.method private final hasAssetPack\(Ljava/lang/String;\)Z\n).*?(\.end method)", re.DOTALL)
+COMPLETE_PACK = re.compile(
+    r"(\.method private static final onDownloadComplete\$lambda\$0\(.*?\)Lkotlin/Unit;\n\s*\.locals [2-9]\n"
+    r"\s*const-string p3, \"pack\"\n\s*invoke-static \{p4, p3\}, [^\n]*\n)")
+SKIP_MISSING_PACK = """
+    # SA-MP: leave out packs Google Play never delivered to this install
+    invoke-virtual {p4}, Lcom/rockstargames/oswrapper/DownloaderPackConfig;->getId()Ljava/lang/String;
+    move-result-object p3
+    iget-object v0, p1, Lcom/rockstargames/oswrapper/DownloaderActivityBase;->assetPackManager:Lcom/google/android/play/core/assetpacks/AssetPackManager;
+    if-eqz v0, :samp_pack_present
+    invoke-interface {v0, p3}, Lcom/google/android/play/core/assetpacks/AssetPackManager;->getPackLocation(Ljava/lang/String;)Lcom/google/android/play/core/assetpacks/AssetPackLocation;
+    move-result-object v0
+    if-nez v0, :samp_pack_present
+    sget-object v0, Lkotlin/Unit;->INSTANCE:Lkotlin/Unit;
+    return-object v0
+    :samp_pack_present
+"""
+
+
+def patch_downloader(decoded):
+    """Lets a re-signed 2.11 install start without the Play-delivered audio packs."""
+    paths = [os.path.join(root, DOWNLOADER.split("/")[-1]) for root, _, files in os.walk(decoded)
+             if DOWNLOADER.split("/")[-1] in files and root.replace("\\", "/").endswith(os.path.dirname(DOWNLOADER))]
+    if not paths:
+        return
+    path = paths[0]
+    text = open(path, encoding="utf-8").read()
+    if "samp_pack_present" in text:
+        return
+    text, has = HAS_PACK.subn(lambda m: m.group(1) + "    .locals 1\n\n    const/4 v0, 0x1\n\n    return v0\n" + m.group(2), text)
+    text, complete = COMPLETE_PACK.subn(lambda m: m.group(1) + SKIP_MISSING_PACK, text)
+    if has != 1 or complete != 1:
+        fail("Rockstar's asset downloader changed in this game version; the APK would wait for Google Play forever")
+    open(path, "w", encoding="utf-8").write(text)
+    print("patched %s: start without the audio packs Google Play can't deliver to this install"
+          % os.path.relpath(path, decoded))
+
+
 BUNDLE_EXTENSIONS = (".apks", ".xapk", ".apkm")
 SIGNATURE_FILE = re.compile(r"^META-INF/([^/]+\.(SF|RSA|DSA|EC)|MANIFEST\.MF)$")
 
@@ -360,6 +402,7 @@ def main():
             if apk == base:
                 shutil.copyfile(lib, os.path.join(decoded, "lib", abi, "libSAMP.so"))
         patch_smali(decoded)
+        patch_downloader(decoded)
         base_out = os.path.join(work, "signed", "base.apk")
         os.makedirs(os.path.dirname(base_out))
         run(apktool + ["b", "-o", os.path.join(work, "base-unsigned.apk"), decoded], quiet=True)
