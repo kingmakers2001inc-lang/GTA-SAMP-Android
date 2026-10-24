@@ -19,18 +19,25 @@ The original Windows toolchain (`build.bat` + `Makefile`) still builds the 32-bi
 | Game build | ABI | Status |
 | --- | --- | --- |
 | Early build in `libs/libGTASA.so` | armeabi-v7a | Reverse engineered; everything in this file applies |
-| 2.11 (current Play Store) | arm64-v8a | Port in progress: builds and links, engine layouts not verified yet |
+| 2.11.311 (current Play Store) | arm64-v8a | Ported and checked against the real engine; not run on a phone yet |
 
-What the 64-bit port has so far:
+2.11 renamed the engine library to `libGame.so` (inside `split_config.arm64_v8a.apk`) and
+starts with a Flutter menu (`libflutter.so`, `libapp.so`). What the 64-bit port checks:
 
-- Hooks go through `src/hook.*`, using And64InlineHook (`inlinehook/arm64/`) on arm64.
-- The 2D render hook calls the game's own function and draws on top, instead of replacing it.
-- Without a 64-bit `libGTASA.so` in `libs/arm64-v8a/`, `build.sh` links against a stand-in made
-  from the client's imports (`obj-ndk/arm64-v8a/engine_imports.txt`). The real game library is used at runtime.
-- Still to verify against the 2.11 binary: that it exports every import, the `CRunningScript`
-  layout (script commands are disabled on arm64 until then), `AND_TouchEvent`, and the ped
-  class layout used for remote players. Check exports with:
-  `python3 tools/engine_stub.py check --symbols obj-ndk/arm64-v8a/engine_imports.txt --lib path/to/libGTASA.so`
+- Every engine import resolves: `build.sh` links with `-z defs` against `libs/arm64-v8a/libGame.so`.
+  Copy it out of your own install (`unzip -j split_config.arm64_v8a.apk lib/arm64-v8a/libGame.so`);
+  it's git-ignored and must never be committed. Without it, `build.sh` links against a stand-in.
+- Text functions take `short*` on 64-bit (`sa_include/GxtChar.h`), and `CRGBA` has no
+  destructor there, so it's passed in a register.
+- `CRunningScript` offsets for script commands, read from `ProcessOneCommand`,
+  `UpdateCompareFlag`, `GetPointerToLocalVariable` and `Init` (`src/CScript.cpp`).
+- `CPlaceable` layout (static asserts in `sa_include/CPlaceable.h`) and the `CPed` vtable order
+  used for remote players and `Teleport`.
+- Hooks go through `src/hook.*`, using And64InlineHook (`inlinehook/arm64/`). The 2D render hook
+  calls the game's own function and draws on top.
+
+Check a new game build's exports with:
+`python3 tools/engine_stub.py check --symbols obj-ndk/arm64-v8a/engine_imports.txt --lib path/to/libGame.so`
 
 ## Making the APK
 

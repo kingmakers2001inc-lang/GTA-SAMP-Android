@@ -15,12 +15,15 @@ case "$ABI" in
 		CXX="$TOOLS/armv7a-linux-androideabi21-clang++"
 		CC="$TOOLS/armv7a-linux-androideabi21-clang"
 		ARCH_FLAGS=(-mthumb)
+		GAME_LIB=GTASA
 		HOOKFILES=$(sed -n 's/^HOOKFILES = //p' Makefile | tr ' ' '\n' | sed 's|^|inlinehook/|')
 		;;
 	arm64-v8a)
 		CXX="$TOOLS/aarch64-linux-android21-clang++"
 		CC="$TOOLS/aarch64-linux-android21-clang"
 		ARCH_FLAGS=()
+		# GTA SA 2.11 (64-bit) renamed the engine library to libGame.so
+		GAME_LIB=Game
 		HOOKFILES=inlinehook/arm64/And64InlineHook.cpp
 		;;
 	*)
@@ -56,10 +59,11 @@ for f in $SRCFILES $RNFILES $HOOKFILES; do
 	OBJS+=("$o")
 done
 
-# libs/<ABI>/libGTASA.so if you have the game library for this ABI, else the 32-bit one in
-# libs/ for armeabi-v7a. arm64 builds without one link against a generated stand-in.
+# libs/<ABI>/lib$GAME_LIB.so if you have the game library for this ABI (copy it out of your own
+# install; it isn't in the repo), else the 32-bit one in libs/ for armeabi-v7a. arm64 builds
+# without one link against a generated stand-in.
 GAME_LIBDIR=libs
-[ -f "libs/$ABI/libGTASA.so" ] && GAME_LIBDIR="libs/$ABI"
+[ -f "libs/$ABI/lib$GAME_LIB.so" ] && GAME_LIBDIR="libs/$ABI"
 if [ "$ABI" != armeabi-v7a ] && [ "$GAME_LIBDIR" = libs ]; then
 	echo "collecting engine imports"
 	"$CXX" -shared -Wl,-z,defs -Wl,--no-demangle -Wl,--error-limit=0 "${OBJS[@]}" -static-libstdc++ -llog \
@@ -71,12 +75,12 @@ if [ "$ABI" != armeabi-v7a ] && [ "$GAME_LIBDIR" = libs ]; then
 		> "$OBJDIR/engine_imports.txt"
 	mkdir -p "$OBJDIR/stub"
 	python3 tools/engine_stub.py stub --symbols "$OBJDIR/engine_imports.txt" --arch arm64 --cc "$CC" \
-		--out "$OBJDIR/stub/libGTASA.so" > /dev/null
+		--soname "lib$GAME_LIB.so" --out "$OBJDIR/stub/lib$GAME_LIB.so" > /dev/null
 	GAME_LIBDIR="$OBJDIR/stub"
-	echo "linking against a stand-in libGTASA.so ($(wc -l < "$OBJDIR/engine_imports.txt") imports in $OBJDIR/engine_imports.txt)"
+	echo "linking against a stand-in lib$GAME_LIB.so ($(wc -l < "$OBJDIR/engine_imports.txt") imports in $OBJDIR/engine_imports.txt)"
 fi
 
 echo "linking $OUTDIR/libSAMP.so"
-"$CXX" -shared -static-libstdc++ -Wl,--gc-sections -Wl,-z,defs -L"$GAME_LIBDIR" "${OBJS[@]}" -llog -lGTASA -o "$OUTDIR/libSAMP.so"
+"$CXX" -shared -static-libstdc++ -Wl,--gc-sections -Wl,-z,defs -L"$GAME_LIBDIR" "${OBJS[@]}" -llog -l"$GAME_LIB" -o "$OUTDIR/libSAMP.so"
 "$STRIP" --strip-all "$OUTDIR/libSAMP.so"
 echo "Build done: $OUTDIR/libSAMP.so"

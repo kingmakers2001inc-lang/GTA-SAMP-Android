@@ -4,10 +4,8 @@
 
 CPlayer::CPlayer()
 {
-#if defined(__aarch64__)
-	// CPed's constructor and size come from the 32-bit build; remote peds wait for the 64-bit port
-	return;
-#endif
+	// CPed::operator new takes a slot from the engine's ped pool (the size is ignored), and the
+	// virtual calls below match the CPed vtable of both the 2.00 and 2.11.311 builds
 	/*
 	m_pPed = new CPlayerPed(1, true);
 	*(unsigned int*)((char *) (m_pPed) + 1432) = 2; //Set type to network player

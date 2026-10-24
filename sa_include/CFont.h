@@ -1,11 +1,13 @@
 #ifndef __CFONT_H__
 #define __CFONT_H__
 
+#include "GxtChar.h"
+
 class CRGBA;
 class CFont
 {
 public:
-	static void PrintString(float, float, unsigned short *);
+	static void PrintString(float, float, GxtChar *);
 	static void RenderFontBuffer();
 	static float GetHeight(bool);
 	
@@ -20,7 +22,7 @@ public:
 	static void SetScale(float);
 	static void SetOrientation(unsigned char);
 	static void SetJustify(unsigned char);
-	static float GetStringWidth(unsigned short *, unsigned char, unsigned char);
+	static float GetStringWidth(GxtChar *, unsigned char, unsigned char);
 };
 
 #endif

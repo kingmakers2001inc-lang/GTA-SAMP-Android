@@ -7,3 +7,6 @@ samp-debug.keystore
 *.apk
 out/
 __pycache__/
+
+# Game libraries copied from your own install; never commit them
+libs/arm64-v8a/

@@ -18,13 +18,11 @@ int CRunningScript__Process_hook(void* p)
 		CNetGame* 	l_pNetGame = CNetGame::Instance();
 		CPlayerPed*	l_pLocalPlayer = l_pNetGame->getPlayerPool()->GetLocalPlayer()->CreateGTAPlayer();
 		
-#if !defined(__aarch64__)
-		// Virtual call through the reversed 32-bit CPed vtable; not verified on 64-bit builds
+		// Teleport is the same CPed vtable slot in the 2.00 and 2.11.311 builds
 		if(l_pLocalPlayer)
 		{
 			l_pLocalPlayer->Teleport(CVector(0.0f, 0.0f, 3.0f), 0);
 		}
-#endif
 		
 		CNetGame::Instance()->Connect();	
 	}
@@ -51,7 +49,7 @@ void LoadingScreen_hook(char const* a1, char const* a2, char const* a3)
 { \
 	char Buffer[200]; \
 	sprintf(Buffer, line, ##__VA_ARGS__); \
-	unsigned short GxtCharBuffer[200]; \
+	GxtChar GxtCharBuffer[200]; \
 	AsciiToGxtChar(Buffer, GxtCharBuffer); \
 	CFont::PrintString(5.0f, 5.0f + l * CFont::GetHeight(false), GxtCharBuffer); \
 	++l; \
