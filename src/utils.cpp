@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <android/log.h>
+#include "crashlog.h"
 
 int log(const char *format, ...)
 {
@@ -12,11 +13,10 @@ int log(const char *format, ...)
    va_start (arg, format);
 
    char buf[2048];
-   done = vsprintf (buf, format, arg);
+   done = vsnprintf (buf, sizeof(buf), format, arg);
 
    __android_log_write(ANDROID_LOG_INFO, "SA_HACK_LOG", buf);
-
-   //TODO: Save it to file or something...
+   CrashLog_Write(buf);
    
    va_end (arg);
 

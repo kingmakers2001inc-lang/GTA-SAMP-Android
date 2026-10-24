@@ -345,11 +345,15 @@ def main():
     parser.add_argument("--apktool", help="path to the apktool launcher")
     parser.add_argument("--apktool-jar", help="path to apktool.jar (run with java -jar)")
     parser.add_argument("--build-tools", help="Android SDK build-tools directory with zipalign and apksigner")
+    parser.add_argument("--reuse", help="a previous output .apks signed with the same key: splits that don't change "
+                        "(like the 1.4 GB data split) are copied from it instead of being re-signed")
     parser.add_argument("--force", action="store_true", help="continue even if the game library is a different build")
     args = parser.parse_args()
 
     if args.port and not args.port.isdigit():
         fail("--port must be a number")
+    if args.reuse and args.out and os.path.abspath(args.reuse) == os.path.abspath(args.out):
+        fail("--reuse must be a different file from --out")
 
     apktool = apktool_command(args)
     zipalign = find_tool("zipalign", None, build_tools_dirs(args))
@@ -418,8 +422,19 @@ def main():
             with zipfile.ZipFile(out, "w", allowZip64=True) as bundle:
                 bundle.write(base_out, "base.apk", compress_type=zipfile.ZIP_STORED)
                 os.remove(base_out)
+                previous = zipfile.ZipFile(args.reuse) if args.reuse else None
+                reusable = set(previous.namelist()) if previous else set()
                 for split in splits:
                     extra = [("lib/%s/libSAMP.so" % abi, lib) for (apk, abi), lib in client_libs.items() if apk == split]
+                    name = os.path.basename(split)
+                    if not extra and name in reusable:
+                        # Unchanged split, already signed with this key by the previous build
+                        print("reusing %s from %s" % (name, args.reuse))
+                        with previous.open(name) as fin, bundle.open(name, "w", force_zip64=True) as fout:
+                            shutil.copyfileobj(fin, fout, 1 << 20)
+                        if split.startswith(work):
+                            os.remove(split)
+                        continue
                     unsigned = os.path.join(work, "split-" + os.path.basename(split))
                     rewrite_split(split, unsigned, extra)
                     if split.startswith(work):

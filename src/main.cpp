@@ -3,6 +3,7 @@
 #include "hooks.h"
 #include "CNetGame.h"
 #include "utils.h"
+#include "crashlog.h"
 
 extern "C" jint JNI_OnLoad(JavaVM* vm, void* reserved);
 jint JNI_OnLoad(JavaVM* vm, void* reserved)
@@ -15,7 +16,10 @@ jint JNI_OnLoad(JavaVM* vm, void* reserved)
     // Get jclass with env->FindClass.
     // Register methods with env->RegisterNatives.
 	
+	CrashLog_Init();
+	log("libSAMP loaded");
 	InitHooks();
+	log("hooks installed");
 
     return JNI_VERSION_1_6;
 }

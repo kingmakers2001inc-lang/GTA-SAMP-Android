@@ -40,7 +40,7 @@ void CPlayer::StreamIn(RPCParameters*) {}
 static char g_FakePed[4096];
 int CStreaming::RequestSpecialModel(int, const char*, int) { return 0; }
 int CStreaming::LoadAllRequestedModels(bool) { return 0; }
-int CWorld::PlayerInFocus = 0;
+signed char CWorld::PlayerInFocus = 0;
 void CPlayerPed::SetupPlayerPed(int) {}
 CPlayerPed* FindPlayerPed(int) { return (CPlayerPed*) g_FakePed; }
 void CClothes::RebuildPlayer(CPlayerPed*, bool) {}
