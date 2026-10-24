@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Turns your own GTA: San Andreas APK into a multiplayer APK.
 
-It adds libSAMP.so next to libGTASA.so, makes the game load it right after
-libGTASA.so, optionally bakes in a server address, then rebuilds and signs
-the APK. The game itself is not part of this repository and is not
+It adds libSAMP.so next to the game library (libGTASA.so, or libGame.so in
+2.11), makes the game load it right after that library, optionally bakes in a
+server address, then rebuilds and signs the APK. The game itself is not part of this repository and is not
 distributed: you need your own copy.
 
 Requirements: Java 8+, apktool, and zipalign + apksigner from the Android
@@ -31,15 +31,18 @@ ELF_CLASS = {"armeabi-v7a": 1, "arm64-v8a": 2}
 # Game builds the client has been reverse engineered against, by ABI
 KNOWN_GAME_BUILDS = {
     "armeabi-v7a": {"59e7198de1916d5f7d22037233f385983099fd53cfab07c707ca25b9d7a834d7": "early 32-bit build (libs/libGTASA.so)"},
-    "arm64-v8a": {},
+    "arm64-v8a": {"4c6a7445e30b27afdda781302e4db9bac89c28fc1181b68b1eef16f84d6a282e": "2.11.311 (Google Play)"},
 }
+
+# The engine library: libGTASA.so up to 2.10, libGame.so from 2.11
+GAME_LIBS = ("libGTASA.so", "libGame.so")
 
 # Matches the defaults block in src/CNetGame.cpp
 DEFAULTS_MAGIC = b"SAMP_DEFAULTS_1\0"
 DEFAULTS_FIELDS = [("host", 64), ("port", 8), ("name", 25)]
 
-LOAD_GTASA = re.compile(
-    r'^(?P<indent>\s*)const-string(?:/jumbo)? (?P<reg>[vp]\d+), "GTASA"\s*\n'
+LOAD_GAME = re.compile(
+    r'^(?P<indent>\s*)const-string(?:/jumbo)? (?P<reg>[vp]\d+), "(?:GTASA|Game)"\s*\n'
     r'(?P<blank>(?:\s*\n|\s*\.line \d+\s*\n)*)'
     r'(?P=indent)invoke-static \{(?P=reg)\}, Ljava/lang/System;->loadLibrary\(Ljava/lang/String;\)V\s*\n',
     re.MULTILINE,
@@ -189,7 +192,7 @@ def patch_smali(decoded):
                 continue
             path = os.path.join(directory, file)
             text = open(path, encoding="utf-8").read()
-            if '"GTASA"' not in text:
+            if '"GTASA"' not in text and '"Game"' not in text:
                 continue
             if '"SAMP"' in text:
                 patched.append(path)
@@ -201,12 +204,12 @@ def patch_smali(decoded):
                         + '\n%sconst-string %s, "SAMP"\n\n' % (indent, reg)
                         + "%sinvoke-static {%s}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V\n" % (indent, reg))
 
-            new_text, count = LOAD_GTASA.subn(add_samp, text)
+            new_text, count = LOAD_GAME.subn(add_samp, text)
             if count:
                 open(path, "w", encoding="utf-8").write(new_text)
                 patched.append(path)
     if not patched:
-        fail('no System.loadLibrary("GTASA") call found in the APK code; is this a GTA: San Andreas APK?')
+        fail('no System.loadLibrary("GTASA") or ("Game") call found in the APK code; is this a GTA: San Andreas APK?')
     for path in patched:
         print("patched " + os.path.relpath(path, decoded))
 
@@ -240,10 +243,10 @@ def unpack_inputs(args, work):
 
 
 def game_libraries(apk):
-    """ABIs that have libGTASA.so inside this APK."""
+    """(ABI, engine library name) pairs found inside this APK."""
     with zipfile.ZipFile(apk) as z:
         names = set(z.namelist())
-    return [abi for abi in ABIS if "lib/%s/libGTASA.so" % abi in names]
+    return [(abi, lib) for abi in ABIS for lib in GAME_LIBS if "lib/%s/%s" % (abi, lib) in names]
 
 
 def prepare_client_lib(args, abi, gtasa, out_path):
@@ -257,7 +260,7 @@ def prepare_client_lib(args, abi, gtasa, out_path):
     print("%s: game library %s (%s)" % (abi, digest[:16], build or "unknown build"))
     missing = check_imports(source, gtasa, abi)
     if missing:
-        fail("the game's libGTASA.so lacks %d function(s) the client uses, so it would not even start. "
+        fail("the game's engine library lacks %d function(s) the client uses, so it would not even start. "
              "This game version needs porting work." % len(missing))
     if not build:
         message = ("the client hasn't been verified against this game build: it links, but engine "
@@ -272,11 +275,13 @@ def prepare_client_lib(args, abi, gtasa, out_path):
 
 def rewrite_split(split, out, extra_libs):
     """Copies a split without its old signature, adding libraries stored uncompressed."""
-    with zipfile.ZipFile(split) as src, zipfile.ZipFile(out, "w") as dst:
+    with zipfile.ZipFile(split) as src, zipfile.ZipFile(out, "w", allowZip64=True) as dst:
         for info in src.infolist():
             if SIGNATURE_FILE.match(info.filename):
                 continue
-            dst.writestr(info, src.read(info.filename), compress_type=info.compress_type)
+            # Streamed, so the 1.4 GB data split of 2.11 doesn't have to fit in memory
+            with src.open(info) as fin, dst.open(info, "w", force_zip64=info.file_size > 0x7FFFFFFF) as fout:
+                shutil.copyfileobj(fin, fout, 1 << 20)
         for name, path in extra_libs:
             # Modern installs map libraries straight from the APK, so they must not be compressed
             dst.write(path, name, compress_type=zipfile.ZIP_STORED)
@@ -298,7 +303,7 @@ def main():
     parser.add_argument("--apktool", help="path to the apktool launcher")
     parser.add_argument("--apktool-jar", help="path to apktool.jar (run with java -jar)")
     parser.add_argument("--build-tools", help="Android SDK build-tools directory with zipalign and apksigner")
-    parser.add_argument("--force", action="store_true", help="continue even if libGTASA.so is a different build")
+    parser.add_argument("--force", action="store_true", help="continue even if the game library is a different build")
     args = parser.parse_args()
 
     if args.port and not args.port.isdigit():
@@ -313,20 +318,20 @@ def main():
         base, splits = unpack_inputs(args, work)
         out = args.out or ("GTA-SAMP.apks" if splits else "GTA-SAMP.apk")
 
-        holders = [(apk, abi) for apk in [base] + splits for abi in game_libraries(apk)]
+        holders = [(apk, abi, name) for apk in [base] + splits for abi, name in game_libraries(apk)]
         if not holders:
-            fail("no lib/<abi>/libGTASA.so in the APK%s. Pass every split of the install with --split, "
+            fail("no lib/<abi>/libGTASA.so or libGame.so in the APK%s. Pass every split of the install with --split, "
                  "or export the whole app as a bundle." % ("s" if splits else ""))
         if args.lib and len(holders) > 1:
             fail("the game has several ABIs; drop --lib to use out/<abi>/libSAMP.so for each")
 
         # Client library per ABI, next to the game library it was checked against
         client_libs = {}
-        for apk, abi in holders:
-            gtasa = os.path.join(work, "game-" + abi, "libGTASA.so")
+        for apk, abi, name in holders:
+            gtasa = os.path.join(work, "game-" + abi, name)
             os.makedirs(os.path.dirname(gtasa))
             with zipfile.ZipFile(apk) as z, open(gtasa, "wb") as f:
-                f.write(z.read("lib/%s/libGTASA.so" % abi))
+                f.write(z.read("lib/%s/%s" % (abi, name)))
             client_libs[(apk, abi)] = os.path.join(os.path.dirname(gtasa), "libSAMP.so")
             prepare_client_lib(args, abi, gtasa, client_libs[(apk, abi)])
 
@@ -342,8 +347,10 @@ def main():
             aligned = unsigned + ".aligned"
             # -p page-aligns uncompressed .so files so they can be mapped in place
             run([zipalign, "-f", "-p", "4", unsigned, aligned])
+            os.remove(unsigned)
             run([apksigner, "sign", "--ks", keystore, "--ks-pass", "pass:" + args.keystore_pass,
                  "--ks-key-alias", args.key_alias, "--out", signed, aligned])
+            os.remove(aligned)
             run([apksigner, "verify", signed])
 
         # Base: code only decode, so resources stay byte-for-byte as they are
@@ -353,28 +360,31 @@ def main():
             if apk == base:
                 shutil.copyfile(lib, os.path.join(decoded, "lib", abi, "libSAMP.so"))
         patch_smali(decoded)
-        signed = []
         base_out = os.path.join(work, "signed", "base.apk")
         os.makedirs(os.path.dirname(base_out))
         run(apktool + ["b", "-o", os.path.join(work, "base-unsigned.apk"), decoded], quiet=True)
         finish(os.path.join(work, "base-unsigned.apk"), base_out)
-        signed.append(base_out)
+        shutil.rmtree(decoded)
 
-        # Splits: every one is re-signed with the same key, the library holders also get libSAMP.so
-        for split in splits:
-            extra = [("lib/%s/libSAMP.so" % abi, lib) for (apk, abi), lib in client_libs.items() if apk == split]
-            unsigned = os.path.join(work, "split-" + os.path.basename(split))
-            rewrite_split(split, unsigned, extra)
-            split_out = os.path.join(work, "signed", os.path.basename(split))
-            finish(unsigned, split_out)
-            signed.append(split_out)
-
-        if splits:
-            with zipfile.ZipFile(out, "w") as bundle:
-                for apk in signed:
-                    bundle.write(apk, os.path.basename(apk), compress_type=zipfile.ZIP_STORED)
-        else:
+        if not splits:
             shutil.copyfile(base_out, out)
+        else:
+            # Splits: every one is re-signed with the same key, the library holders also get libSAMP.so.
+            # Each goes into the bundle as soon as it's signed and temporary copies are deleted on the
+            # way, so a phone only needs a few times the size of the biggest split free (2.11: 1.4 GB).
+            with zipfile.ZipFile(out, "w", allowZip64=True) as bundle:
+                bundle.write(base_out, "base.apk", compress_type=zipfile.ZIP_STORED)
+                os.remove(base_out)
+                for split in splits:
+                    extra = [("lib/%s/libSAMP.so" % abi, lib) for (apk, abi), lib in client_libs.items() if apk == split]
+                    unsigned = os.path.join(work, "split-" + os.path.basename(split))
+                    rewrite_split(split, unsigned, extra)
+                    if split.startswith(work):
+                        os.remove(split)
+                    split_out = os.path.join(work, "signed", os.path.basename(split))
+                    finish(unsigned, split_out)
+                    bundle.write(split_out, os.path.basename(split), compress_type=zipfile.ZIP_STORED)
+                    os.remove(split_out)
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
